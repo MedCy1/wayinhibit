@@ -166,7 +166,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .flush()
         .map_err(|err| format!("failed to flush shutdown requests: {err}"))?;
 
-    println!("Stopped idle inhibition.");
+    println!("\nStopped idle inhibition.");
 
     Ok(())
 }
