@@ -18,11 +18,29 @@ The initial implementation target is:
 - create an idle inhibition request
 - keep it alive until the process receives a termination signal
 
+## Current behavior
+
+`wayinhibit` currently:
+
+- connects to the active Wayland compositor
+- binds `wl_compositor`
+- binds `zwp_idle_inhibit_manager_v1`
+- creates a surface and an idle inhibitor
+- stays alive until the process exits
+
+This requires a compositor that supports `zwp_idle_inhibit_manager_v1`.
+
 ## Development
 
 ```bash
 cargo fmt
 cargo check
+```
+
+Run the inhibitor:
+
+```bash
+cargo run
 ```
 
 ## License
