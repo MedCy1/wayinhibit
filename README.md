@@ -27,6 +27,7 @@ The initial implementation target is:
 - binds `zwp_idle_inhibit_manager_v1`
 - creates a surface and an idle inhibitor
 - stays alive until the process receives `Ctrl-C` or `SIGTERM`
+- can keep idle inhibition active while a child command is running
 
 This requires a compositor that supports `zwp_idle_inhibit_manager_v1`.
 
@@ -41,6 +42,12 @@ Run the inhibitor:
 
 ```bash
 cargo run
+```
+
+Run a command under inhibition:
+
+```bash
+cargo run -- -- sleep 10
 ```
 
 ## License
