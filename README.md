@@ -26,7 +26,7 @@ The initial implementation target is:
 - binds `wl_compositor`
 - binds `zwp_idle_inhibit_manager_v1`
 - creates a surface and an idle inhibitor
-- stays alive until the process exits
+- stays alive until the process receives `Ctrl-C` or `SIGTERM`
 
 This requires a compositor that supports `zwp_idle_inhibit_manager_v1`.
 
