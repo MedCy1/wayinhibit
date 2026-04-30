@@ -38,6 +38,16 @@ cargo fmt
 cargo check
 ```
 
+Common development entrypoints:
+
+```bash
+make help
+make setup
+make quality
+make run
+make run-command CMD="sleep 10"
+```
+
 Run the full local quality suite:
 
 ```bash
