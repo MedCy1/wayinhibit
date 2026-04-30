@@ -38,6 +38,23 @@ cargo fmt
 cargo check
 ```
 
+Run the full local quality suite:
+
+```bash
+./scripts/quality.sh all
+```
+
+Install the repository Git hooks:
+
+```bash
+./scripts/install-hooks.sh
+```
+
+The hooks currently run:
+
+- `pre-commit`: `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D warnings`
+- `pre-push`: `cargo check --locked` and `cargo test --locked`
+
 Run the inhibitor:
 
 ```bash
