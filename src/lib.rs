@@ -52,22 +52,26 @@ fn run(config: Config) -> Result<ExitCode, String> {
     let mut inhibitor = IdleInhibitor::connect(Duration::from_millis(250))?;
 
     let exit_code = match config.command {
-        Some(command) => run_with_child(&mut inhibitor, command.spawn()?)?,
-        None => run_until_stopped(&mut inhibitor)?,
+        Some(command) => run_with_child(&mut inhibitor, command.spawn()?, config.quiet)?,
+        None => run_until_stopped(&mut inhibitor, config.quiet)?,
     };
 
     inhibitor.shutdown()?;
 
-    println!("\nStopped idle inhibition.");
+    if !config.quiet {
+        println!("\nStopped idle inhibition.");
+    }
 
     Ok(exit_code)
 }
 
-fn run_until_stopped(inhibitor: &mut IdleInhibitor) -> Result<ExitCode, String> {
-    println!(
-        "Inhibiting idle. PID: {}. Press Ctrl-C to stop.",
-        std::process::id()
-    );
+fn run_until_stopped(inhibitor: &mut IdleInhibitor, quiet: bool) -> Result<ExitCode, String> {
+    if !quiet {
+        println!(
+            "Inhibiting idle. PID: {}. Press Ctrl-C to stop.",
+            std::process::id()
+        );
+    }
 
     while !signal::is_stop_requested() {
         inhibitor.tick()?;
@@ -79,11 +83,14 @@ fn run_until_stopped(inhibitor: &mut IdleInhibitor) -> Result<ExitCode, String> 
 fn run_with_child(
     inhibitor: &mut IdleInhibitor,
     mut child: ManagedChild,
+    quiet: bool,
 ) -> Result<ExitCode, String> {
-    println!(
-        "Inhibiting idle while the child command is running. PID: {}. Press Ctrl-C to stop.",
-        std::process::id()
-    );
+    if !quiet {
+        println!(
+            "Inhibiting idle while the child command is running. PID: {}. Press Ctrl-C to stop.",
+            std::process::id()
+        );
+    }
 
     loop {
         if signal::is_stop_requested() {

@@ -12,6 +12,7 @@ Usage:
   wayinhibit [OPTIONS] -- <COMMAND> [ARG...]
 
 Options:
+  -q, --quiet      Suppress all output
   -h, --help       Print help
   -V, --version    Print version
 "
@@ -21,6 +22,7 @@ Options:
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub command: Option<CommandSpec>,
+    pub quiet: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +34,10 @@ pub enum ParseOutcome {
 
 pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
     if args.is_empty() {
-        return Ok(ParseOutcome::Run(Config { command: None }));
+        return Ok(ParseOutcome::Run(Config {
+            command: None,
+            quiet: false,
+        }));
     }
 
     match args {
@@ -41,8 +46,15 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
         _ => {}
     }
 
-    if let Some(separator_index) = args.iter().position(|arg| arg == "--") {
-        let command_args = &args[separator_index + 1..];
+    let quiet = args.iter().any(|arg| arg == "-q" || arg == "--quiet");
+
+    let remaining: Vec<&String> = args
+        .iter()
+        .filter(|arg| *arg != "-q" && *arg != "--quiet")
+        .collect();
+
+    if let Some(separator_index) = remaining.iter().position(|arg| *arg == "--") {
+        let command_args = &remaining[separator_index + 1..];
         if command_args.is_empty() {
             return Err("expected a command after '--'".to_string());
         }
@@ -50,14 +62,26 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
         return Ok(ParseOutcome::Run(Config {
             command: Some(CommandSpec {
                 program: command_args[0].clone(),
-                args: command_args[1..].to_vec(),
+                args: command_args[1..].iter().map(|s| (*s).clone()).collect(),
             }),
+            quiet,
+        }));
+    }
+
+    if remaining.is_empty() {
+        return Ok(ParseOutcome::Run(Config {
+            command: None,
+            quiet,
         }));
     }
 
     Err(format!(
         "unsupported arguments: {}. Use '-- <COMMAND> [ARG...]' to run a command under inhibition.",
-        args.join(" ")
+        remaining
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
     ))
 }
 
@@ -72,7 +96,10 @@ mod tests {
 
         assert_eq!(
             parse_args(&args),
-            Ok(ParseOutcome::Run(Config { command: None }))
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+            }))
         );
     }
 
@@ -101,6 +128,7 @@ mod tests {
                     program: "sleep".to_string(),
                     args: vec!["1".to_string()],
                 }),
+                quiet: false,
             }))
         );
     }
@@ -120,5 +148,52 @@ mod tests {
         let args = vec!["sleep".to_string(), "1".to_string()];
 
         assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn parses_quiet_flag() {
+        let args = vec!["--quiet".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: true,
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_quiet_short_flag() {
+        let args = vec!["-q".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: true,
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_quiet_with_command() {
+        let args = vec![
+            "-q".to_string(),
+            "--".to_string(),
+            "sleep".to_string(),
+            "1".to_string(),
+        ];
+
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: Some(CommandSpec {
+                    program: "sleep".to_string(),
+                    args: vec!["1".to_string()],
+                }),
+                quiet: true,
+            }))
+        );
     }
 }
