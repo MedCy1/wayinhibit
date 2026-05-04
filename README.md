@@ -8,28 +8,22 @@ The goal of the project is simple:
 - stay focused on doing one thing well
 - keep the implementation easy to audit and package
 
-## Status
+## Usage
 
-The repository is currently in bootstrap state.
+Run in foreground mode — inhibits idle until you press `Ctrl-C`:
 
-The initial implementation target is:
+```bash
+wayinhibit
+```
 
-- connect to the active Wayland session
-- create an idle inhibition request
-- keep it alive until the process receives a termination signal
+Run a command under inhibition — idle inhibition is released when the command exits:
 
-## Current behavior
+```bash
+wayinhibit -- sleep 60
+wayinhibit -- rsync -av /src /dst
+```
 
-`wayinhibit` currently:
-
-- connects to the active Wayland compositor
-- binds `wl_compositor`
-- binds `zwp_idle_inhibit_manager_v1`
-- creates a surface and an idle inhibitor
-- stays alive until the process receives `Ctrl-C` or `SIGTERM`
-- can keep idle inhibition active while a child command is running
-
-This requires a compositor that supports `zwp_idle_inhibit_manager_v1`.
+Requires a compositor that supports `zwp_idle_inhibit_manager_v1`.
 
 ## Development
 
