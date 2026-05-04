@@ -8,14 +8,21 @@ extern "C" fn handle_shutdown_signal(_: libc::c_int) {
 
 pub fn install() -> Result<(), String> {
     unsafe {
-        let handler = handle_shutdown_signal as *const () as libc::sighandler_t;
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = handle_shutdown_signal as *const () as libc::sighandler_t;
+        action.sa_flags = libc::SA_RESTART;
 
-        if libc::signal(libc::SIGINT, handler) == libc::SIG_ERR {
-            return Err("failed to install SIGINT handler".to_string());
+        if libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut()) == -1 {
+            return Err(format!(
+                "failed to install SIGINT handler: {}",
+                std::io::Error::last_os_error()
+            ));
         }
-
-        if libc::signal(libc::SIGTERM, handler) == libc::SIG_ERR {
-            return Err("failed to install SIGTERM handler".to_string());
+        if libc::sigaction(libc::SIGTERM, &action, std::ptr::null_mut()) == -1 {
+            return Err(format!(
+                "failed to install SIGTERM handler: {}",
+                std::io::Error::last_os_error()
+            ));
         }
     }
 
