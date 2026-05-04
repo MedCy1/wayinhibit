@@ -5,7 +5,7 @@ QUALITY_SCRIPT := ./scripts/quality.sh
 INSTALL_HOOKS_SCRIPT := ./scripts/install-hooks.sh
 CMD ?=
 
-.PHONY: help setup hooks quality quality-commit quality-push fmt check test clippy run run-command install clean
+.PHONY: help setup hooks quality quality-commit quality-push fmt check test clippy run run-command install clean release
 
 help: ## Show available targets
 	@printf '%s\n' 'Available targets:'
@@ -52,3 +52,10 @@ install: ## Install the binary locally with cargo using Cargo.lock
 
 clean: ## Remove Cargo build artifacts
 	@$(CARGO) clean
+
+release: ## Release a new version: make release VERSION=x.y.z
+	@if [ -z "$(VERSION)" ]; then \
+		printf '%s\n' 'Usage: make release VERSION=x.y.z' >&2; \
+		exit 2; \
+	fi
+	@./scripts/release.sh "$(VERSION)"
