@@ -12,8 +12,8 @@ source=(
     "LICENSE::https://raw.githubusercontent.com/MedCy1/wayinhibit/v$pkgver/LICENSE"
 )
 sha256sums=(
-    'SKIP'
-    'SKIP'
+    '0638666139be58fa54fc7d8729a4561958a526ddc9447ed4d11229daf25a3ce3'
+    'c6f47d3c350962a79fc1501510e8e1cc8fbcc6502d8421505ba1b9fbd1ef6237'
 )
 
 package() {
