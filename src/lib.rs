@@ -42,7 +42,7 @@ pub fn run_from_env() -> ExitCode {
 }
 
 fn print_help() {
-    println!("{}", cli::HELP_TEXT.replace("0.1.0", VERSION));
+    print!("{}", cli::help_text(VERSION));
 }
 
 fn run(config: Config) -> Result<ExitCode, String> {

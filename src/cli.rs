@@ -1,7 +1,9 @@
 use crate::child::CommandSpec;
 
-pub const HELP_TEXT: &str = "\
-wayinhibit 0.1.0
+pub fn help_text(version: &str) -> String {
+    format!(
+        "\
+wayinhibit {version}
 
 A small Wayland idle inhibitor written in Rust.
 
@@ -12,7 +14,9 @@ Usage:
 Options:
   -h, --help       Print help
   -V, --version    Print version
-";
+"
+    )
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
