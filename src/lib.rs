@@ -4,7 +4,7 @@ mod signal;
 mod wayland;
 
 use std::process::ExitCode;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use child::ManagedChild;
 use cli::{Config, ParseOutcome, parse_args};
@@ -50,10 +50,11 @@ fn run(config: Config) -> Result<ExitCode, String> {
     signal::install()?;
 
     let mut inhibitor = IdleInhibitor::connect(Duration::from_millis(250))?;
+    let deadline = config.timeout.map(|d| Instant::now() + d);
 
     let exit_code = match config.command {
-        Some(command) => run_with_child(&mut inhibitor, command.spawn()?, config.quiet)?,
-        None => run_until_stopped(&mut inhibitor, config.quiet)?,
+        Some(command) => run_with_child(&mut inhibitor, command.spawn()?, config.quiet, deadline)?,
+        None => run_until_stopped(&mut inhibitor, config.quiet, deadline)?,
     };
 
     inhibitor.shutdown()?;
@@ -65,7 +66,11 @@ fn run(config: Config) -> Result<ExitCode, String> {
     Ok(exit_code)
 }
 
-fn run_until_stopped(inhibitor: &mut IdleInhibitor, quiet: bool) -> Result<ExitCode, String> {
+fn run_until_stopped(
+    inhibitor: &mut IdleInhibitor,
+    quiet: bool,
+    deadline: Option<Instant>,
+) -> Result<ExitCode, String> {
     if !quiet {
         println!(
             "Inhibiting idle. PID: {}. Press Ctrl-C to stop.",
@@ -74,6 +79,9 @@ fn run_until_stopped(inhibitor: &mut IdleInhibitor, quiet: bool) -> Result<ExitC
     }
 
     while !signal::is_stop_requested() {
+        if deadline.is_some_and(|dl| Instant::now() >= dl) {
+            break;
+        }
         inhibitor.tick()?;
     }
 
@@ -84,6 +92,7 @@ fn run_with_child(
     inhibitor: &mut IdleInhibitor,
     mut child: ManagedChild,
     quiet: bool,
+    deadline: Option<Instant>,
 ) -> Result<ExitCode, String> {
     if !quiet {
         println!(
@@ -93,7 +102,7 @@ fn run_with_child(
     }
 
     loop {
-        if signal::is_stop_requested() {
+        if signal::is_stop_requested() || deadline.is_some_and(|dl| Instant::now() >= dl) {
             let code = child.terminate_and_wait(CHILD_SHUTDOWN_GRACE_PERIOD)?;
             return Ok(ExitCode::from(code));
         }
