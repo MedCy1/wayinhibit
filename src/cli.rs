@@ -302,4 +302,17 @@ mod tests {
         assert!(parse_duration("5").is_err());
         assert!(parse_duration("").is_err());
     }
+
+    #[test]
+    fn parses_quiet_and_timeout_combined() {
+        let args = vec!["-q".to_string(), "-t".to_string(), "5m".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: true,
+                timeout: Some(Duration::from_secs(300)),
+            }))
+        );
+    }
 }
