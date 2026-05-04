@@ -64,7 +64,10 @@ fn run(config: Config) -> Result<ExitCode, String> {
 }
 
 fn run_until_stopped(inhibitor: &mut IdleInhibitor) -> Result<ExitCode, String> {
-    println!("Inhibiting idle. Press Ctrl-C to stop.");
+    println!(
+        "Inhibiting idle. PID: {}. Press Ctrl-C to stop.",
+        std::process::id()
+    );
 
     while !signal::is_stop_requested() {
         inhibitor.tick()?;
@@ -77,7 +80,10 @@ fn run_with_child(
     inhibitor: &mut IdleInhibitor,
     mut child: ManagedChild,
 ) -> Result<ExitCode, String> {
-    println!("Inhibiting idle while the child command is running. Press Ctrl-C to stop.");
+    println!(
+        "Inhibiting idle while the child command is running. PID: {}. Press Ctrl-C to stop.",
+        std::process::id()
+    );
 
     loop {
         if signal::is_stop_requested() {
