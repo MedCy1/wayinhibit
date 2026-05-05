@@ -4,12 +4,17 @@ on:
   workflow_run:
     workflows: ["Release"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to update AUR for (e.g. v0.4.0)'
+        required: true
 
 jobs:
   aur:
     name: Update AUR package
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v')) }}
     permissions:
       contents: write
 
@@ -31,7 +36,7 @@ jobs:
       - name: Compute checksums
         id: sums
         run: |
-          TAG="${{ github.event.workflow_run.head_branch }}"
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}"
           VERSION="${TAG#v}"
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
