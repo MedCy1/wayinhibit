@@ -89,6 +89,10 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                     .ok_or_else(|| "--timeout requires a value".to_string())?;
                 timeout = Some(parse_duration(val)?);
             }
+            flag if flag.starts_with("--timeout=") => {
+                let val = flag.strip_prefix("--timeout=").unwrap();
+                timeout = Some(parse_duration(val)?);
+            }
             "--" => break,
             other => {
                 return Err(format!(
@@ -314,5 +318,43 @@ mod tests {
                 timeout: Some(Duration::from_secs(300)),
             }))
         );
+    }
+
+    #[test]
+    fn parses_timeout_inline_equals() {
+        let args = vec!["--timeout=30s".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: Some(Duration::from_secs(30)),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_timeout_inline_equals_minutes() {
+        let args = vec!["--timeout=5m".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: Some(Duration::from_secs(300)),
+            }))
+        );
+    }
+
+    #[test]
+    fn rejects_timeout_inline_equals_invalid_duration() {
+        let args = vec!["--timeout=abc".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn rejects_timeout_inline_equals_empty_value() {
+        let args = vec!["--timeout=".to_string()];
+        assert!(parse_args(&args).is_err());
     }
 }
