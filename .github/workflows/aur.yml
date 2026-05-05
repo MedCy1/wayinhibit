@@ -1,19 +1,23 @@
 name: Update AUR
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
 
 jobs:
   aur:
     name: Update AUR package
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
     permissions:
       contents: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Set up SSH for AUR
         env:
@@ -27,16 +31,17 @@ jobs:
       - name: Compute checksums
         id: sums
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          VERSION="${TAG#v}"
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
           BINARY_SHA=$(curl -fsSL \
-            "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/wayinhibit-x86_64" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-x86_64" \
             | sha256sum | cut -d' ' -f1)
           printf 'binary_sha=%s\n' "$BINARY_SHA" >> "$GITHUB_OUTPUT"
 
           LICENSE_SHA=$(curl -fsSL \
-            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/LICENSE" \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/LICENSE" \
             | sha256sum | cut -d' ' -f1)
           printf 'license_sha=%s\n' "$LICENSE_SHA" >> "$GITHUB_OUTPUT"
 
