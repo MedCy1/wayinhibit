@@ -29,9 +29,10 @@ jobs:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "$AUR_SSH_KEY" > ~/.ssh/aur
+          printf '%b\n' "$AUR_SSH_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
           printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n  StrictHostKeyChecking no\n' >> ~/.ssh/config
+
 
       - name: Compute checksums
         id: sums
@@ -102,8 +103,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packaging/
-          git commit -m "chore: update AUR packaging for v${{ steps.sums.outputs.version }}"
-          git push
+          git diff --cached --quiet || git commit -m "chore: update AUR packaging for v${{ steps.sums.outputs.version }}"
+          git diff --quiet HEAD origin/main || git push
 
       - name: Clone AUR repository
         run: git clone ssh://aur@aur.archlinux.org/wayinhibit.git /tmp/aur
