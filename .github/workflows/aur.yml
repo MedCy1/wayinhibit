@@ -1,0 +1,110 @@
+name: Update AUR
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  aur:
+    name: Update AUR package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up SSH for AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n  StrictHostKeyChecking no\n' >> ~/.ssh/config
+
+      - name: Compute checksums
+        id: sums
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+
+          BINARY_SHA=$(curl -fsSL \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/wayinhibit-x86_64" \
+            | sha256sum | cut -d' ' -f1)
+          printf 'binary_sha=%s\n' "$BINARY_SHA" >> "$GITHUB_OUTPUT"
+
+          LICENSE_SHA=$(curl -fsSL \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/LICENSE" \
+            | sha256sum | cut -d' ' -f1)
+          printf 'license_sha=%s\n' "$LICENSE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update PKGBUILD and .SRCINFO
+        env:
+          VERSION: ${{ steps.sums.outputs.version }}
+          BINARY_SHA: ${{ steps.sums.outputs.binary_sha }}
+          LICENSE_SHA: ${{ steps.sums.outputs.license_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - << 'EOF'
+          import os, re
+
+          version = os.environ['VERSION']
+          binary_sha = os.environ['BINARY_SHA']
+          license_sha = os.environ['LICENSE_SHA']
+          repo = os.environ['REPO']
+
+          # Update PKGBUILD
+          content = open('packaging/PKGBUILD').read()
+          content = re.sub(r'^pkgver=.*', f'pkgver={version}', content, flags=re.M)
+          content = re.sub(r'^pkgrel=.*', 'pkgrel=1', content, flags=re.M)
+          content = re.sub(
+              r"sha256sums=\(.*?\)",
+              f"sha256sums=(\n    '{binary_sha}'\n    '{license_sha}'\n)",
+              content,
+              flags=re.DOTALL,
+          )
+          open('packaging/PKGBUILD', 'w').write(content)
+
+          # Generate .SRCINFO
+          srcinfo = (
+              f"pkgbase = wayinhibit\n"
+              f"\tpkgdesc = A small Wayland idle inhibitor written in Rust\n"
+              f"\tpkgver = {version}\n"
+              f"\tpkgrel = 1\n"
+              f"\turl = https://github.com/{repo}\n"
+              f"\tarch = x86_64\n"
+              f"\tlicense = MIT\n"
+              f"\tdepends = wayland\n"
+              f"\tsource = wayinhibit-{version}::https://github.com/{repo}/releases/download/v{version}/wayinhibit-x86_64\n"
+              f"\tsource = LICENSE::https://raw.githubusercontent.com/{repo}/v{version}/LICENSE\n"
+              f"\tsha256sums = {binary_sha}\n"
+              f"\tsha256sums = {license_sha}\n"
+              f"\n"
+              f"pkgname = wayinhibit\n"
+          )
+          open('packaging/.SRCINFO', 'w').write(srcinfo)
+          EOF
+
+      - name: Commit updated packaging files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packaging/
+          git commit -m "chore: update AUR packaging for v${{ steps.sums.outputs.version }}"
+          git push
+
+      - name: Clone AUR repository
+        run: git clone ssh://aur@aur.archlinux.org/wayinhibit.git /tmp/aur
+
+      - name: Push to AUR
+        run: |
+          cp packaging/PKGBUILD /tmp/aur/PKGBUILD
+          cp packaging/.SRCINFO /tmp/aur/.SRCINFO
+          cd /tmp/aur
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${{ steps.sums.outputs.version }}"
+          git push
