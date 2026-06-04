@@ -11,11 +11,9 @@ on:
         required: true
 
 jobs:
-  release:
-    name: Build and publish release
+  build:
+    name: Build release binary
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Check out repository
@@ -29,8 +27,52 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked
 
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayinhibit-x86_64
+          path: target/release/wayinhibit
+          retention-days: 1
+
+  smoke-test:
+    name: Smoke test on Arch Linux
+    needs: build
+    runs-on: ubuntu-latest
+    container: archlinux:base
+
+    steps:
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wayinhibit-x86_64
+
+      - name: Make binary executable
+        run: chmod +x wayinhibit
+
+      - name: Check version output
+        run: |
+          version=$(./wayinhibit --version)
+          echo "Reported version: $version"
+          [ -n "$version" ]
+
+      - name: Check help output
+        run: ./wayinhibit --help
+
+  release:
+    name: Publish GitHub release
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wayinhibit-x86_64
+
       - name: Rename binary for release
-        run: cp target/release/wayinhibit wayinhibit-x86_64
+        run: mv wayinhibit wayinhibit-x86_64
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
