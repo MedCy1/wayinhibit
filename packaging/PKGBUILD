@@ -6,7 +6,7 @@ pkgdesc="A small Wayland idle inhibitor written in Rust"
 arch=('x86_64')
 url="https://github.com/MedCy1/wayinhibit"
 license=('MIT')
-depends=('wayland')
+depends=('glibc' 'gcc-libs')
 source=(
     "wayinhibit-$pkgver::https://github.com/MedCy1/wayinhibit/releases/download/v$pkgver/wayinhibit-$CARCH"
     "LICENSE::https://raw.githubusercontent.com/MedCy1/wayinhibit/v$pkgver/LICENSE"
