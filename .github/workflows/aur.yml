@@ -33,7 +33,6 @@ jobs:
           chmod 600 ~/.ssh/aur
           printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n  StrictHostKeyChecking no\n' >> ~/.ssh/config
 
-
       - name: Compute checksums
         id: sums
         run: |
@@ -41,10 +40,15 @@ jobs:
           VERSION="${TAG#v}"
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
-          BINARY_SHA=$(curl -fsSL \
+          BINARY_SHA_X86_64=$(curl -fsSL \
             "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-x86_64" \
             | sha256sum | cut -d' ' -f1)
-          printf 'binary_sha=%s\n' "$BINARY_SHA" >> "$GITHUB_OUTPUT"
+          printf 'binary_sha_x86_64=%s\n' "$BINARY_SHA_X86_64" >> "$GITHUB_OUTPUT"
+
+          BINARY_SHA_AARCH64=$(curl -fsSL \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-aarch64" \
+            | sha256sum | cut -d' ' -f1)
+          printf 'binary_sha_aarch64=%s\n' "$BINARY_SHA_AARCH64" >> "$GITHUB_OUTPUT"
 
           LICENSE_SHA=$(curl -fsSL \
             "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/LICENSE" \
@@ -54,7 +58,8 @@ jobs:
       - name: Update PKGBUILD and .SRCINFO
         env:
           VERSION: ${{ steps.sums.outputs.version }}
-          BINARY_SHA: ${{ steps.sums.outputs.binary_sha }}
+          BINARY_SHA_X86_64: ${{ steps.sums.outputs.binary_sha_x86_64 }}
+          BINARY_SHA_AARCH64: ${{ steps.sums.outputs.binary_sha_aarch64 }}
           LICENSE_SHA: ${{ steps.sums.outputs.license_sha }}
           REPO: ${{ github.repository }}
         run: |
@@ -62,7 +67,8 @@ jobs:
           import os, re
 
           version = os.environ['VERSION']
-          binary_sha = os.environ['BINARY_SHA']
+          binary_sha_x86_64 = os.environ['BINARY_SHA_X86_64']
+          binary_sha_aarch64 = os.environ['BINARY_SHA_AARCH64']
           license_sha = os.environ['LICENSE_SHA']
           repo = os.environ['REPO']
 
@@ -72,9 +78,18 @@ jobs:
           content = re.sub(r'^pkgrel=.*', 'pkgrel=1', content, flags=re.M)
           content = re.sub(
               r"sha256sums=\(.*?\)",
-              f"sha256sums=(\n    '{binary_sha}'\n    '{license_sha}'\n)",
-              content,
-              flags=re.DOTALL,
+              f"sha256sums=(\n    '{license_sha}'\n)",
+              content, flags=re.DOTALL,
+          )
+          content = re.sub(
+              r"sha256sums_x86_64=\(.*?\)",
+              f"sha256sums_x86_64=(\n    '{binary_sha_x86_64}'\n)",
+              content, flags=re.DOTALL,
+          )
+          content = re.sub(
+              r"sha256sums_aarch64=\(.*?\)",
+              f"sha256sums_aarch64=(\n    '{binary_sha_aarch64}'\n)",
+              content, flags=re.DOTALL,
           )
           open('packaging/PKGBUILD', 'w').write(content)
 
@@ -86,13 +101,16 @@ jobs:
               f"\tpkgrel = 1\n"
               f"\turl = https://github.com/{repo}\n"
               f"\tarch = x86_64\n"
+              f"\tarch = aarch64\n"
               f"\tlicense = MIT\n"
               f"\tdepends = glibc\n"
               f"\tdepends = gcc-libs\n"
-              f"\tsource = wayinhibit-{version}::https://github.com/{repo}/releases/download/v{version}/wayinhibit-x86_64\n"
               f"\tsource = LICENSE::https://raw.githubusercontent.com/{repo}/v{version}/LICENSE\n"
-              f"\tsha256sums = {binary_sha}\n"
               f"\tsha256sums = {license_sha}\n"
+              f"\tsource_x86_64 = wayinhibit-{version}::https://github.com/{repo}/releases/download/v{version}/wayinhibit-x86_64\n"
+              f"\tsha256sums_x86_64 = {binary_sha_x86_64}\n"
+              f"\tsource_aarch64 = wayinhibit-{version}::https://github.com/{repo}/releases/download/v{version}/wayinhibit-aarch64\n"
+              f"\tsha256sums_aarch64 = {binary_sha_aarch64}\n"
               f"\n"
               f"pkgname = wayinhibit\n"
           )
