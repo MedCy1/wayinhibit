@@ -49,26 +49,31 @@ jobs:
       - name: Cache Cargo registry and build artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Install weston
-        run: sudo apt-get install -y weston
+      - name: Install sway
+        run: sudo apt-get install -y sway
 
       - name: Build
         run: cargo build --locked
 
       - name: Run Wayland integration tests
+        env:
+          WLR_BACKENDS: headless
+          WLR_RENDERER: pixman
+          WLR_LIBINPUT_NO_DEVICES: "1"
         run: |
           export XDG_RUNTIME_DIR=$(mktemp -d)
-          weston --backend=headless-backend.so --socket=wayland-test &
-          WESTON_PID=$!
-          trap "kill $WESTON_PID 2>/dev/null || true" EXIT
+          sway -c /dev/null 2>/dev/null &
+          SWAY_PID=$!
+          trap "kill $SWAY_PID 2>/dev/null || true" EXIT
 
-          for i in $(seq 1 10); do
-            [ -S "$XDG_RUNTIME_DIR/wayland-test" ] && break
+          for i in $(seq 1 20); do
+            SOCKET=$(find "$XDG_RUNTIME_DIR" -name 'wayland-*' ! -name '*.lock' 2>/dev/null | head -1)
+            [ -n "$SOCKET" ] && break
             sleep 0.5
           done
-          [ -S "$XDG_RUNTIME_DIR/wayland-test" ] || { echo "error: weston failed to start"; exit 1; }
+          [ -n "$SOCKET" ] || { echo "error: sway failed to start"; exit 1; }
 
-          export WAYLAND_DISPLAY=wayland-test
+          export WAYLAND_DISPLAY=$(basename "$SOCKET")
 
           ./target/debug/wayinhibit --quiet --timeout 1s
           echo "ok: foreground mode with timeout"
