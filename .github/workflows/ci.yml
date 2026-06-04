@@ -35,6 +35,51 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
+  integration-test:
+    name: Wayland integration test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install weston
+        run: sudo apt-get install -y weston
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Run Wayland integration tests
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d)
+          weston --backend=headless-backend.so --socket=wayland-test &
+          WESTON_PID=$!
+          trap "kill $WESTON_PID 2>/dev/null || true" EXIT
+
+          for i in $(seq 1 10); do
+            [ -S "$XDG_RUNTIME_DIR/wayland-test" ] && break
+            sleep 0.5
+          done
+          [ -S "$XDG_RUNTIME_DIR/wayland-test" ] || { echo "error: weston failed to start"; exit 1; }
+
+          export WAYLAND_DISPLAY=wayland-test
+
+          ./target/debug/wayinhibit --quiet --timeout 1s
+          echo "ok: foreground mode with timeout"
+
+          ./target/debug/wayinhibit --quiet --timeout 5s -- true
+          echo "ok: child command mode"
+
+          ./target/debug/wayinhibit --quiet --timeout 5s -- sh -c 'exit 42' && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 42 ] || { echo "error: expected exit code 42, got $STATUS"; exit 1; }
+          echo "ok: child exit code is propagated"
+
   namcap:
     name: Validate PKGBUILD
     runs-on: ubuntu-latest
