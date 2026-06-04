@@ -12,8 +12,15 @@ on:
 
 jobs:
   build:
-    name: Build release binary
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
 
     steps:
       - name: Check out repository
@@ -30,12 +37,12 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v5
         with:
-          name: wayinhibit-x86_64
+          name: wayinhibit-${{ matrix.target }}
           path: target/release/wayinhibit
           retention-days: 1
 
-  smoke-test:
-    name: Smoke test on Arch Linux
+  smoke-test-x86_64:
+    name: Smoke test — Arch Linux (x86_64)
     needs: build
     runs-on: ubuntu-latest
     container: archlinux:base
@@ -58,24 +65,58 @@ jobs:
       - name: Check help output
         run: ./wayinhibit --help
 
-  release:
-    name: Publish GitHub release
-    needs: smoke-test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  smoke-test-aarch64:
+    name: Smoke test — ARM64 (aarch64)
+    needs: build
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Download binary artifact
         uses: actions/download-artifact@v5
         with:
-          name: wayinhibit-x86_64
+          name: wayinhibit-aarch64
 
-      - name: Rename binary for release
-        run: mv wayinhibit wayinhibit-x86_64
+      - name: Make binary executable
+        run: chmod +x wayinhibit
+
+      - name: Check version output
+        run: |
+          version=$(./wayinhibit --version)
+          echo "Reported version: $version"
+          [ -n "$version" ]
+
+      - name: Check help output
+        run: ./wayinhibit --help
+
+  release:
+    name: Publish GitHub release
+    needs: [smoke-test-x86_64, smoke-test-aarch64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download x86_64 artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: wayinhibit-x86_64
+          path: x86_64
+
+      - name: Download aarch64 artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: wayinhibit-aarch64
+          path: aarch64
+
+      - name: Rename binaries for release
+        run: |
+          mv x86_64/wayinhibit wayinhibit-x86_64
+          mv aarch64/wayinhibit wayinhibit-aarch64
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          files: wayinhibit-x86_64
+          files: |
+            wayinhibit-x86_64
+            wayinhibit-aarch64
