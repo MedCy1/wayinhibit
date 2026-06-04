@@ -1,5 +1,9 @@
 # wayinhibit
 
+[![CI](https://github.com/MedCy1/wayinhibit/actions/workflows/ci.yml/badge.svg)](https://github.com/MedCy1/wayinhibit/actions/workflows/ci.yml)
+[![AUR version](https://img.shields.io/aur/version/wayinhibit)](https://aur.archlinux.org/packages/wayinhibit)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 `wayinhibit` is a small Wayland idle inhibitor written in Rust.
 
 The goal of the project is simple:
