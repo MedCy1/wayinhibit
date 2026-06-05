@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [Unreleased]
+## [0.6.0] - 2026-06-05
 
 ### Bug Fixes
 
@@ -11,14 +11,26 @@ All notable changes to this project will be documented in this file.
 ### CI & Automation
 
 - Generate release notes with git-cliff
+- Publish to crates.io after each release
+- Add cargo-deny for license and vulnerability auditing
+- Add Dependabot for Cargo and GitHub Actions updates
+- Add MSRV check and expand Wayland integration tests
+- Add code coverage with cargo-llvm-cov and Codecov
+- Wire Codecov token and fix badge URL
 
 ### Documentation
 
 - Set cacheSeconds=3600 on AUR version badge
+- Add CHANGELOG.md generated from conventional commits
+- Add CONTRIBUTING.md
+- Rewrite README with installation, features, and examples
+- Add bug report and feature request issue templates
 
 ### Features
 
 - Add cliff.toml for conventional commit changelog
+- Add Nix flake
+- Add --pid-file / -p flag
 ## [0.5.1] - 2026-06-05
 
 ### Bug Fixes
