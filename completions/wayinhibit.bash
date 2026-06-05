@@ -19,8 +19,15 @@ _wayinhibit() {
             ;;
     esac
 
+    case "$prev" in
+        -p|--pid-file)
+            COMPREPLY=($(compgen -f -- "$cur"))
+            return
+            ;;
+    esac
+
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "-t --timeout -q --quiet -h --help -V --version" -- "$cur"))
+        COMPREPLY=($(compgen -W "-t --timeout -q --quiet -p --pid-file -h --help -V --version" -- "$cur"))
     fi
 }
 

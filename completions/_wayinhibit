@@ -4,6 +4,7 @@ _wayinhibit() {
     _arguments -s -S \
         '(-t --timeout)'{-t,--timeout}'[stop after a given duration]:duration (e.g. 30s\, 5m\, 2h)' \
         '(-q --quiet)'{-q,--quiet}'[suppress all output]' \
+        '(-p --pid-file)'{-p,--pid-file}'[write PID to file on startup]:pid file:_files' \
         '(-h --help)'{-h,--help}'[print help and exit]' \
         '(-V --version)'{-V,--version}'[print version and exit]'
 }

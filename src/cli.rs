@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::child::CommandSpec;
@@ -16,6 +17,7 @@ Usage:
 Options:
   -t, --timeout <DURATION>  Stop after a given duration (e.g. 30s, 5m, 2h)
   -q, --quiet               Suppress all output
+  -p, --pid-file <PATH>     Write PID to PATH on startup, remove it on exit
   -h, --help                Print help
   -V, --version             Print version
 "
@@ -27,6 +29,7 @@ pub struct Config {
     pub command: Option<CommandSpec>,
     pub quiet: bool,
     pub timeout: Option<Duration>,
+    pub pid_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +69,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             command: None,
             quiet: false,
             timeout: None,
+            pid_file: None,
         }));
     }
 
@@ -77,6 +81,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
 
     let mut quiet = false;
     let mut timeout = None;
+    let mut pid_file = None;
     let mut i = 0;
 
     while i < args.len() {
@@ -92,6 +97,20 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             flag if flag.starts_with("--timeout=") => {
                 let val = flag.strip_prefix("--timeout=").unwrap();
                 timeout = Some(parse_duration(val)?);
+            }
+            "-p" | "--pid-file" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "--pid-file requires a value".to_string())?;
+                pid_file = Some(PathBuf::from(val));
+            }
+            flag if flag.starts_with("--pid-file=") => {
+                let val = flag.strip_prefix("--pid-file=").unwrap();
+                if val.is_empty() {
+                    return Err("--pid-file requires a value".to_string());
+                }
+                pid_file = Some(PathBuf::from(val));
             }
             "--" => break,
             other => {
@@ -121,12 +140,15 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
         command,
         quiet,
         timeout,
+        pid_file,
     }))
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+
+    use std::path::PathBuf;
 
     use super::{Config, ParseOutcome, parse_args, parse_duration};
     use crate::child::CommandSpec;
@@ -139,6 +161,7 @@ mod tests {
                 command: None,
                 quiet: false,
                 timeout: None,
+                pid_file: None,
             }))
         );
     }
@@ -168,6 +191,7 @@ mod tests {
                 }),
                 quiet: false,
                 timeout: None,
+                pid_file: None,
             }))
         );
     }
@@ -196,6 +220,7 @@ mod tests {
                 command: None,
                 quiet: true,
                 timeout: None,
+                pid_file: None,
             }))
         );
     }
@@ -209,6 +234,7 @@ mod tests {
                 command: None,
                 quiet: true,
                 timeout: None,
+                pid_file: None,
             }))
         );
     }
@@ -230,6 +256,7 @@ mod tests {
                 }),
                 quiet: true,
                 timeout: None,
+                pid_file: None,
             }))
         );
     }
@@ -243,6 +270,7 @@ mod tests {
                 command: None,
                 quiet: false,
                 timeout: Some(Duration::from_secs(30)),
+                pid_file: None,
             }))
         );
     }
@@ -256,6 +284,7 @@ mod tests {
                 command: None,
                 quiet: false,
                 timeout: Some(Duration::from_secs(300)),
+                pid_file: None,
             }))
         );
     }
@@ -269,6 +298,7 @@ mod tests {
                 command: None,
                 quiet: false,
                 timeout: Some(Duration::from_secs(7200)),
+                pid_file: None,
             }))
         );
     }
@@ -290,6 +320,7 @@ mod tests {
                 }),
                 quiet: false,
                 timeout: Some(Duration::from_secs(600)),
+                pid_file: None,
             }))
         );
     }
@@ -316,6 +347,7 @@ mod tests {
                 command: None,
                 quiet: true,
                 timeout: Some(Duration::from_secs(300)),
+                pid_file: None,
             }))
         );
     }
@@ -329,6 +361,7 @@ mod tests {
                 command: None,
                 quiet: false,
                 timeout: Some(Duration::from_secs(30)),
+                pid_file: None,
             }))
         );
     }
@@ -342,6 +375,7 @@ mod tests {
                 command: None,
                 quiet: false,
                 timeout: Some(Duration::from_secs(300)),
+                pid_file: None,
             }))
         );
     }
@@ -355,6 +389,60 @@ mod tests {
     #[test]
     fn rejects_timeout_inline_equals_empty_value() {
         let args = vec!["--timeout=".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn parses_pid_file() {
+        let args = vec!["--pid-file".to_string(), "/run/wayinhibit.pid".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: Some(PathBuf::from("/run/wayinhibit.pid")),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_pid_file_short_flag() {
+        let args = vec!["-p".to_string(), "/tmp/wi.pid".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: Some(PathBuf::from("/tmp/wi.pid")),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_pid_file_inline_equals() {
+        let args = vec!["--pid-file=/tmp/wi.pid".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: Some(PathBuf::from("/tmp/wi.pid")),
+            }))
+        );
+    }
+
+    #[test]
+    fn rejects_pid_file_without_value() {
+        let args = vec!["--pid-file".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn rejects_pid_file_inline_equals_empty_value() {
+        let args = vec!["--pid-file=".to_string()];
         assert!(parse_args(&args).is_err());
     }
 }

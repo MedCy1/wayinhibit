@@ -55,6 +55,14 @@ Examples:
 .BR \-q ", " \-\-quiet
 Suppress all informational output.
 .TP
+.BR \-p ", " \-\-pid\-file " " \fIPATH\fR
+Write the process ID to
+.I PATH
+on startup and remove it on exit.
+Useful for signaling
+.B wayinhibit
+from scripts or service managers.
+.TP
 .BR \-h ", " \-\-help
 Print a short usage summary and exit.
 .TP

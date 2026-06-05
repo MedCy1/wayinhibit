@@ -3,6 +3,7 @@ mod cli;
 mod signal;
 mod wayland;
 
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
@@ -13,6 +14,23 @@ use wayland::IdleInhibitor;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BIN_NAME: &str = env!("CARGO_PKG_NAME");
 const CHILD_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(2);
+
+struct PidFile(PathBuf);
+
+impl PidFile {
+    fn create(path: &Path) -> Result<Self, String> {
+        let pid = std::process::id();
+        std::fs::write(path, format!("{pid}\n"))
+            .map_err(|err| format!("failed to write PID file '{}': {err}", path.display()))?;
+        Ok(Self(path.to_owned()))
+    }
+}
+
+impl Drop for PidFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
 
 pub fn run_from_env() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -51,6 +69,12 @@ fn run(config: Config) -> Result<ExitCode, String> {
 
     let mut inhibitor = IdleInhibitor::connect(Duration::from_millis(250))?;
     let deadline = config.timeout.map(|d| Instant::now() + d);
+
+    let _pid_file = config
+        .pid_file
+        .as_deref()
+        .map(PidFile::create)
+        .transpose()?;
 
     let exit_code = match config.command {
         Some(command) => run_with_child(&mut inhibitor, command.spawn()?, config.quiet, deadline)?,
