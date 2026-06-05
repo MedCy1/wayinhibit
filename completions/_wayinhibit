@@ -1,0 +1,11 @@
+#compdef wayinhibit
+
+_wayinhibit() {
+    _arguments -s -S \
+        '(-t --timeout)'{-t,--timeout}'[stop after a given duration]:duration (e.g. 30s\, 5m\, 2h)' \
+        '(-q --quiet)'{-q,--quiet}'[suppress all output]' \
+        '(-h --help)'{-h,--help}'[print help and exit]' \
+        '(-V --version)'{-V,--version}'[print version and exit]'
+}
+
+_wayinhibit "$@"
