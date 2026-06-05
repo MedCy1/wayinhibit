@@ -96,6 +96,41 @@ jobs:
           [ $STATUS -eq 42 ] || { echo "error: expected exit code 42, got $STATUS"; exit 1; }
           echo "ok: child exit code is propagated"
 
+          output=$(./target/debug/wayinhibit --timeout 1s 2>&1)
+          [ -n "$output" ] || { echo "error: expected output in non-quiet mode"; exit 1; }
+          output=$(./target/debug/wayinhibit --quiet --timeout 1s 2>&1)
+          [ -z "$output" ] || { echo "error: --quiet should suppress output, got: $output"; exit 1; }
+          echo "ok: --quiet suppresses all output"
+
+          ./target/debug/wayinhibit --timeout 30s &
+          WINH_PID=$!
+          sleep 0.3
+          kill -TERM $WINH_PID
+          wait $WINH_PID && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 0 ] || { echo "error: expected exit 0 on SIGTERM, got $STATUS"; exit 1; }
+          echo "ok: SIGTERM stops cleanly with exit code 0"
+
+          WAYLAND_DISPLAY=nonexistent ./target/debug/wayinhibit --timeout 1s 2>/dev/null && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 1 ] || { echo "error: expected exit 1 when no compositor, got $STATUS"; exit 1; }
+          echo "ok: exits with code 1 when compositor is unavailable"
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@1.85
+
+      - name: Cache Cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check compilation on MSRV
+        run: cargo check --locked
+
   namcap:
     name: Validate PKGBUILD
     runs-on: ubuntu-latest
