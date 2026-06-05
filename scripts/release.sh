@@ -36,8 +36,12 @@ printf '==> Bumping version in Cargo.toml...\n'
 sed -i "s/^version = \"$CURRENT\"/version = \"$VERSION\"/" Cargo.toml
 cargo check
 
+printf '==> Updating man page version and date...\n'
+TODAY=$(date +%Y-%m-%d)
+sed -i "s/\"[0-9-]*\" \"wayinhibit $CURRENT\"/\"$TODAY\" \"wayinhibit $VERSION\"/" man/wayinhibit.1
+
 printf '==> Committing...\n'
-git add Cargo.toml Cargo.lock
+git add Cargo.toml Cargo.lock man/wayinhibit.1
 git commit -m "chore: bump version to $VERSION"
 
 printf '==> Tagging and pushing...\n'
