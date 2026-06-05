@@ -1,0 +1,151 @@
+.TH WAYINHIBIT 1 "2026-06-05" "wayinhibit 0.5.0" "User Commands"
+.
+.SH NAME
+wayinhibit \- Wayland idle inhibitor
+.
+.SH SYNOPSIS
+.SY wayinhibit
+.RI [ OPTIONS ]
+.YS
+.SY wayinhibit
+.RI [ OPTIONS ]
+.B \-\-
+.I COMMAND
+.RI [ ARG .\|.\|.]
+.YS
+.
+.SH DESCRIPTION
+.B wayinhibit
+prevents the Wayland compositor from activating the idle state
+(screen lock, screen off, suspend) while it is running.
+.PP
+Without a command,
+.B wayinhibit
+runs in the foreground and inhibits idle until it receives
+.B SIGINT
+or
+.BR SIGTERM .
+.PP
+With a command,
+.B wayinhibit
+runs that command as a child process, inhibits idle for its duration,
+and exits with the same exit code.
+.PP
+Requires a compositor that supports the
+.B zwp_idle_inhibit_manager_v1
+Wayland protocol.
+.
+.SH OPTIONS
+.TP
+.BR \-t ", " \-\-timeout " " \fIDURATION\fR
+Stop after
+.IR DURATION .
+Accepted suffixes:
+.B s
+(seconds),
+.B m
+(minutes),
+.B h
+(hours).
+Examples:
+.BR 30s ,
+.BR 5m ,
+.BR 2h .
+.TP
+.BR \-q ", " \-\-quiet
+Suppress all informational output.
+.TP
+.BR \-h ", " \-\-help
+Print a short usage summary and exit.
+.TP
+.BR \-V ", " \-\-version
+Print the version number and exit.
+.
+.SH EXIT STATUS
+.TP
+.B 0
+Stopped normally: received
+.B SIGINT
+or
+.BR SIGTERM ,
+the timeout elapsed (foreground mode), or the child command exited
+with status 0 (command mode).
+.TP
+.B 1
+A runtime error occurred (e.g.\& failed to connect to the Wayland compositor).
+.TP
+.B 2
+Invalid arguments were supplied.
+.TP
+.I N
+In command mode, the exit code of
+.I COMMAND
+is propagated as\-is.
+If
+.I COMMAND
+was terminated by a signal, the exit code is 128 + signal number.
+.
+.SH EXAMPLES
+Inhibit idle until Ctrl\-C:
+.PP
+.RS 4
+.EX
+wayinhibit
+.EE
+.RE
+.PP
+Inhibit idle for 30 minutes, then stop:
+.PP
+.RS 4
+.EX
+wayinhibit \-\-timeout 30m
+.EE
+.RE
+.PP
+Inhibit idle while a long rsync runs:
+.PP
+.RS 4
+.EX
+wayinhibit \-\- rsync \-av /src /dst
+.EE
+.RE
+.PP
+Run a backup script silently and propagate its exit code:
+.PP
+.RS 4
+.EX
+wayinhibit \-\-quiet \-\- ./backup.sh
+.EE
+.RE
+.
+.SH NOTES
+The
+.B zwp_idle_inhibit_manager_v1
+protocol is supported by most wlroots-based compositors (Sway, Hyprland,
+river, labwc) as well as GNOME and KDE on Wayland.
+.PP
+The process ID is printed on startup (unless
+.B \-\-quiet
+is set) so that
+.B wayinhibit
+can be signaled from scripts:
+.PP
+.RS 4
+.EX
+kill $(wayinhibit | grep -o 'PID: [0-9]*' | grep -o '[0-9]*')
+.EE
+.RE
+.
+.SH SEE ALSO
+.BR wayland (7),
+.BR kill (1),
+.BR signal (7)
+.
+.SH AUTHORS
+MedCy1
+.MT mederick.roge@gmail.com
+.ME
+.PP
+Source and issue tracker:
+.UR https://github.com/MedCy1/wayinhibit
+.UE
