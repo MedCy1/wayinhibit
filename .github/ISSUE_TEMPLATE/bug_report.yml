@@ -1,0 +1,45 @@
+name: Bug report
+description: Something is not working as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `wayinhibit --version`
+      placeholder: "0.5.1"
+    validations:
+      required: true
+
+  - type: input
+    id: compositor
+    attributes:
+      label: Compositor
+      description: Name and version of your Wayland compositor
+      placeholder: "Sway 1.9, Hyprland 0.40.0, GNOME 46..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened and what you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `wayinhibit -- sleep 60`
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Relevant logs, error messages, or environment details
