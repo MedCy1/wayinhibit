@@ -40,8 +40,11 @@ printf '==> Updating man page version and date...\n'
 TODAY=$(date +%Y-%m-%d)
 sed -i "s/\"[0-9-]*\" \"wayinhibit $CURRENT\"/\"$TODAY\" \"wayinhibit $VERSION\"/" man/wayinhibit.1
 
+printf '==> Updating CHANGELOG.md...\n'
+git cliff --tag "v$VERSION" --output CHANGELOG.md
+
 printf '==> Committing...\n'
-git add Cargo.toml Cargo.lock man/wayinhibit.1
+git add Cargo.toml Cargo.lock man/wayinhibit.1 CHANGELOG.md
 git commit -m "chore: bump version to $VERSION"
 
 printf '==> Tagging and pushing...\n'
