@@ -55,12 +55,30 @@ jobs:
             | sha256sum | cut -d' ' -f1)
           printf 'license_sha=%s\n' "$LICENSE_SHA" >> "$GITHUB_OUTPUT"
 
+          BASH_SHA=$(curl -fsSL \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/completions/wayinhibit.bash" \
+            | sha256sum | cut -d' ' -f1)
+          printf 'bash_sha=%s\n' "$BASH_SHA" >> "$GITHUB_OUTPUT"
+
+          ZSH_SHA=$(curl -fsSL \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/completions/_wayinhibit" \
+            | sha256sum | cut -d' ' -f1)
+          printf 'zsh_sha=%s\n' "$ZSH_SHA" >> "$GITHUB_OUTPUT"
+
+          FISH_SHA=$(curl -fsSL \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/completions/wayinhibit.fish" \
+            | sha256sum | cut -d' ' -f1)
+          printf 'fish_sha=%s\n' "$FISH_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Update PKGBUILD and .SRCINFO
         env:
           VERSION: ${{ steps.sums.outputs.version }}
           BINARY_SHA_X86_64: ${{ steps.sums.outputs.binary_sha_x86_64 }}
           BINARY_SHA_AARCH64: ${{ steps.sums.outputs.binary_sha_aarch64 }}
           LICENSE_SHA: ${{ steps.sums.outputs.license_sha }}
+          BASH_SHA: ${{ steps.sums.outputs.bash_sha }}
+          ZSH_SHA: ${{ steps.sums.outputs.zsh_sha }}
+          FISH_SHA: ${{ steps.sums.outputs.fish_sha }}
           REPO: ${{ github.repository }}
         run: |
           python3 - << 'EOF'
@@ -70,6 +88,9 @@ jobs:
           binary_sha_x86_64 = os.environ['BINARY_SHA_X86_64']
           binary_sha_aarch64 = os.environ['BINARY_SHA_AARCH64']
           license_sha = os.environ['LICENSE_SHA']
+          bash_sha = os.environ['BASH_SHA']
+          zsh_sha = os.environ['ZSH_SHA']
+          fish_sha = os.environ['FISH_SHA']
           repo = os.environ['REPO']
 
           # Update PKGBUILD
@@ -78,7 +99,7 @@ jobs:
           content = re.sub(r'^pkgrel=.*', 'pkgrel=1', content, flags=re.M)
           content = re.sub(
               r"sha256sums=\(.*?\)",
-              f"sha256sums=(\n    '{license_sha}'\n)",
+              f"sha256sums=(\n    '{license_sha}'\n    '{bash_sha}'\n    '{zsh_sha}'\n    '{fish_sha}'\n)",
               content, flags=re.DOTALL,
           )
           content = re.sub(
@@ -106,7 +127,13 @@ jobs:
               f"\tdepends = glibc\n"
               f"\tdepends = gcc-libs\n"
               f"\tsource = LICENSE::https://raw.githubusercontent.com/{repo}/v{version}/LICENSE\n"
+              f"\tsource = wayinhibit.bash::https://raw.githubusercontent.com/{repo}/v{version}/completions/wayinhibit.bash\n"
+              f"\tsource = _wayinhibit::https://raw.githubusercontent.com/{repo}/v{version}/completions/_wayinhibit\n"
+              f"\tsource = wayinhibit.fish::https://raw.githubusercontent.com/{repo}/v{version}/completions/wayinhibit.fish\n"
               f"\tsha256sums = {license_sha}\n"
+              f"\tsha256sums = {bash_sha}\n"
+              f"\tsha256sums = {zsh_sha}\n"
+              f"\tsha256sums = {fish_sha}\n"
               f"\tsource_x86_64 = wayinhibit-{version}::https://github.com/{repo}/releases/download/v{version}/wayinhibit-x86_64\n"
               f"\tsha256sums_x86_64 = {binary_sha_x86_64}\n"
               f"\tsource_aarch64 = wayinhibit-{version}::https://github.com/{repo}/releases/download/v{version}/wayinhibit-aarch64\n"
