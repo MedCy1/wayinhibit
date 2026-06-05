@@ -4,77 +4,127 @@
 [![AUR version](https://img.shields.io/aur/version/wayinhibit?cacheSeconds=3600)](https://aur.archlinux.org/packages/wayinhibit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`wayinhibit` is a small Wayland idle inhibitor written in Rust.
+A small Wayland idle inhibitor written in Rust. Prevents your compositor from locking the screen or suspending while a command is running or until you stop it manually.
 
-The goal of the project is simple:
+## Features
 
-- provide a small and reliable CLI
-- stay focused on doing one thing well
-- keep the implementation easy to audit and package
+- **Foreground mode** — inhibits idle until `Ctrl-C` or `SIGTERM`
+- **Command mode** — wraps a command and releases inhibition when it exits
+- **Timeout** — stop automatically after a given duration (`30s`, `5m`, `2h`)
+- **Quiet mode** — suppress all output for use in scripts
+- **Exit code propagation** — in command mode, exits with the same code as the wrapped command
+- **PID printed on startup** — makes it easy to signal from other scripts
+
+## Installation
+
+**Arch Linux (AUR)**
+
+```bash
+yay -S wayinhibit
+# or: paru -S wayinhibit
+```
+
+**Cargo**
+
+```bash
+cargo install wayinhibit
+```
+
+**Nix**
+
+```bash
+nix run github:MedCy1/wayinhibit
+```
+
+**Build from source**
+
+```bash
+git clone https://github.com/MedCy1/wayinhibit
+cd wayinhibit
+cargo build --release
+```
 
 ## Usage
 
-Run in foreground mode — inhibits idle until you press `Ctrl-C`:
+Inhibit idle until `Ctrl-C`:
 
 ```bash
 wayinhibit
 ```
 
-Run a command under inhibition — idle inhibition is released when the command exits:
+Inhibit idle while a command runs, then exit with its exit code:
 
 ```bash
-wayinhibit -- sleep 60
 wayinhibit -- rsync -av /src /dst
+wayinhibit -- yt-dlp https://example.com/video
+wayinhibit -- ssh user@host 'long-running-task'
 ```
 
-Requires a compositor that supports `zwp_idle_inhibit_manager_v1`.
+Stop automatically after a timeout:
+
+```bash
+wayinhibit --timeout 2h
+wayinhibit --timeout 30m -- ./backup.sh
+```
+
+Use in a script without any output:
+
+```bash
+wayinhibit --quiet -- ./encode.sh
+```
+
+Signal from another terminal using the printed PID:
+
+```bash
+# terminal 1
+wayinhibit
+# Inhibiting idle. PID: 12345. Press Ctrl-C to stop.
+
+# terminal 2
+kill 12345
+```
+
+## Options
+
+| Flag | Description |
+|---|---|
+| `-t`, `--timeout <DURATION>` | Stop after a given duration (`30s`, `5m`, `2h`) |
+| `-q`, `--quiet` | Suppress all output |
+| `-h`, `--help` | Print help |
+| `-V`, `--version` | Print version |
+
+## Compatibility
+
+Requires a compositor that supports the `zwp_idle_inhibit_manager_v1` Wayland protocol, which includes:
+
+- **wlroots-based**: Sway, Hyprland, river, labwc, wayfire
+- **GNOME** (Wayland session)
+- **KDE Plasma** (Wayland session)
 
 ## Development
-
-```bash
-cargo fmt
-cargo check
-```
-
-Common development entrypoints:
-
-```bash
-make help
-make setup
-make quality
-make run
-make run-command CMD="sleep 10"
-```
-
-Run the full local quality suite:
-
-```bash
-./scripts/quality.sh all
-```
 
 Install the repository Git hooks:
 
 ```bash
-./scripts/install-hooks.sh
+make setup
 ```
 
-The hooks currently run:
-
-- `pre-commit`: `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D warnings`
-- `pre-push`: `cargo check --locked` and `cargo test --locked`
-
-Run the inhibitor:
+Run the full quality suite:
 
 ```bash
-cargo run
+make quality
 ```
 
-Run a command under inhibition:
+Individual checks:
 
 ```bash
-cargo run -- -- sleep 10
+make fmt      # Check formatting
+make clippy   # Run Clippy
+make test     # Run tests
 ```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more details.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT — see [`LICENSE`](LICENSE).
