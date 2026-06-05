@@ -1,6 +1,7 @@
 # wayinhibit
 
 [![CI](https://github.com/MedCy1/wayinhibit/actions/workflows/ci.yml/badge.svg)](https://github.com/MedCy1/wayinhibit/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/MedCy1/wayinhibit/branch/main/graph/badge.svg)](https://codecov.io/gh/MedCy1/wayinhibit)
 [![AUR version](https://img.shields.io/aur/version/wayinhibit?cacheSeconds=3600)](https://aur.archlinux.org/packages/wayinhibit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
