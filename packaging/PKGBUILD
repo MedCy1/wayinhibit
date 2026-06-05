@@ -17,7 +17,7 @@ source_aarch64=(
     "wayinhibit-bin::https://github.com/MedCy1/wayinhibit/releases/download/v$pkgver/wayinhibit-aarch64"
 )
 sha256sums=(
-    'SKIP'
+    '582fab05dffbaa5209069b9317429441ef148f5c1ab7442ae248ca095ff4a028'
 )
 sha256sums_x86_64=(
     '85f22294b2fcf9b9337e93434c4baf0f8ab22088f0851b85aa0afa25d192fc1e'
