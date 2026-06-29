@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.6.1] - 2026-06-29
+
+### Bug Fixes
+
+- Improve error message when compositor lacks idle inhibit support
 ## [0.6.0] - 2026-06-05
 
 ### Bug Fixes
