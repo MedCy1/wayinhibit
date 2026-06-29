@@ -113,6 +113,17 @@ jobs:
           [ $STATUS -eq 2 ] || { echo "error: expected exit 2 for invalid args, got $STATUS"; exit 1; }
           echo "ok: invalid args exits with code 2"
 
+          INHIBIT_FILE=$(mktemp)
+          RELEASE_FILE=$(mktemp)
+          rm "$INHIBIT_FILE" "$RELEASE_FILE"
+          ./target/debug/wayinhibit --dry-run --timeout 1s \
+            --on-inhibit "touch $INHIBIT_FILE" \
+            --on-release "touch $RELEASE_FILE"
+          [ -f "$INHIBIT_FILE" ] || { echo "error: --dry-run did not fire --on-inhibit"; exit 1; }
+          [ -f "$RELEASE_FILE" ] || { echo "error: --dry-run did not fire --on-release"; exit 1; }
+          rm -f "$INHIBIT_FILE" "$RELEASE_FILE"
+          echo "ok: --dry-run fires hooks without a compositor"
+
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload to Codecov

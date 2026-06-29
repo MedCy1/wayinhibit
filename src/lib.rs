@@ -67,7 +67,12 @@ fn run(config: Config) -> Result<ExitCode, String> {
     signal::reset();
     signal::install()?;
 
-    let mut inhibitor = IdleInhibitor::connect(Duration::from_millis(250))?;
+    let mut inhibitor = if config.dry_run {
+        None
+    } else {
+        Some(IdleInhibitor::connect(Duration::from_millis(250))?)
+    };
+
     let deadline = config.timeout.map(|d| Instant::now() + d);
 
     let _pid_file = config
@@ -80,12 +85,22 @@ fn run(config: Config) -> Result<ExitCode, String> {
         run_hook(cmd);
     }
 
+    let prefix = if config.dry_run { "[dry-run] " } else { "" };
+
     let exit_code = match config.command {
-        Some(command) => run_with_child(&mut inhibitor, command.spawn()?, config.quiet, deadline)?,
-        None => run_until_stopped(&mut inhibitor, config.quiet, deadline)?,
+        Some(command) => run_with_child(
+            &mut inhibitor,
+            command.spawn()?,
+            config.quiet,
+            deadline,
+            prefix,
+        )?,
+        None => run_until_stopped(&mut inhibitor, config.quiet, deadline, prefix)?,
     };
 
-    inhibitor.shutdown()?;
+    if let Some(ref mut inh) = inhibitor {
+        inh.shutdown()?;
+    }
 
     if let Some(ref cmd) = config.on_release {
         run_hook(cmd);
@@ -102,14 +117,25 @@ fn run_hook(cmd: &str) {
     let _ = std::process::Command::new("sh").arg("-c").arg(cmd).status();
 }
 
+fn tick(inhibitor: &mut Option<IdleInhibitor>) -> Result<(), String> {
+    match inhibitor {
+        Some(inh) => inh.tick(),
+        None => {
+            std::thread::sleep(Duration::from_millis(250));
+            Ok(())
+        }
+    }
+}
+
 fn run_until_stopped(
-    inhibitor: &mut IdleInhibitor,
+    inhibitor: &mut Option<IdleInhibitor>,
     quiet: bool,
     deadline: Option<Instant>,
+    prefix: &str,
 ) -> Result<ExitCode, String> {
     if !quiet {
         println!(
-            "Inhibiting idle. PID: {}. Press Ctrl-C to stop.",
+            "{prefix}Inhibiting idle. PID: {}. Press Ctrl-C to stop.",
             std::process::id()
         );
     }
@@ -118,21 +144,22 @@ fn run_until_stopped(
         if deadline.is_some_and(|dl| Instant::now() >= dl) {
             break;
         }
-        inhibitor.tick()?;
+        tick(inhibitor)?;
     }
 
     Ok(ExitCode::SUCCESS)
 }
 
 fn run_with_child(
-    inhibitor: &mut IdleInhibitor,
+    inhibitor: &mut Option<IdleInhibitor>,
     mut child: ManagedChild,
     quiet: bool,
     deadline: Option<Instant>,
+    prefix: &str,
 ) -> Result<ExitCode, String> {
     if !quiet {
         println!(
-            "Inhibiting idle while the child command is running. PID: {}. Press Ctrl-C to stop.",
+            "{prefix}Inhibiting idle while the child command is running. PID: {}. Press Ctrl-C to stop.",
             std::process::id()
         );
     }
@@ -147,6 +174,6 @@ fn run_with_child(
             return Ok(ExitCode::from(code));
         }
 
-        inhibitor.tick()?;
+        tick(inhibitor)?;
     }
 }

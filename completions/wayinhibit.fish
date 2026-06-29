@@ -14,6 +14,8 @@ complete -c wayinhibit -l on-inhibit \
 complete -c wayinhibit -l on-release \
     -d 'Run command (via sh -c) when inhibition stops' \
     -r
+complete -c wayinhibit -l dry-run \
+    -d 'Run without connecting to Wayland (for testing hooks)'
 complete -c wayinhibit -s h -l help \
     -d 'Print help and exit'
 complete -c wayinhibit -s V -l version \

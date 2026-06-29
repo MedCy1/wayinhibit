@@ -20,6 +20,7 @@ Options:
   -p, --pid-file <PATH>         Write PID to PATH on startup, remove it on exit
       --on-inhibit <CMD>        Run CMD (via sh -c) when inhibition starts
       --on-release <CMD>        Run CMD (via sh -c) when inhibition stops
+      --dry-run                 Run without connecting to Wayland (for testing hooks)
   -h, --help                    Print help
   -V, --version                 Print version
 "
@@ -34,6 +35,7 @@ pub struct Config {
     pub pid_file: Option<PathBuf>,
     pub on_inhibit: Option<String>,
     pub on_release: Option<String>,
+    pub dry_run: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +78,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             pid_file: None,
             on_inhibit: None,
             on_release: None,
+            dry_run: false,
         }));
     }
 
@@ -90,6 +93,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
     let mut pid_file = None;
     let mut on_inhibit = None;
     let mut on_release = None;
+    let mut dry_run = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -148,6 +152,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 }
                 on_release = Some(val.to_string());
             }
+            "--dry-run" => dry_run = true,
             "--" => break,
             other => {
                 return Err(format!(
@@ -179,6 +184,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
         pid_file,
         on_inhibit,
         on_release,
+        dry_run,
     }))
 }
 
@@ -202,6 +208,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -234,6 +241,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -265,6 +273,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -281,6 +290,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -305,6 +315,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -321,6 +332,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -337,6 +349,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -353,6 +366,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -377,6 +391,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -406,6 +421,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -422,6 +438,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -438,6 +455,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -466,6 +484,7 @@ mod tests {
                 pid_file: Some(PathBuf::from("/run/wayinhibit.pid")),
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -482,6 +501,7 @@ mod tests {
                 pid_file: Some(PathBuf::from("/tmp/wi.pid")),
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -498,6 +518,7 @@ mod tests {
                 pid_file: Some(PathBuf::from("/tmp/wi.pid")),
                 on_inhibit: None,
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -526,6 +547,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: Some("notify-send start".to_string()),
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -542,6 +564,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: None,
                 on_release: Some("notify-send stop".to_string()),
+                dry_run: false,
             }))
         );
     }
@@ -558,6 +581,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: Some("echo hello".to_string()),
                 on_release: None,
+                dry_run: false,
             }))
         );
     }
@@ -579,6 +603,7 @@ mod tests {
                 pid_file: None,
                 on_inhibit: Some("echo start".to_string()),
                 on_release: Some("echo stop".to_string()),
+                dry_run: false,
             }))
         );
     }
@@ -605,5 +630,47 @@ mod tests {
     fn rejects_on_release_inline_equals_empty_value() {
         let args = vec!["--on-release=".to_string()];
         assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn parses_dry_run() {
+        let args = vec!["--dry-run".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: None,
+                on_inhibit: None,
+                on_release: None,
+                dry_run: true,
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_dry_run_with_hooks() {
+        let args = vec![
+            "--dry-run".to_string(),
+            "--on-inhibit".to_string(),
+            "echo start".to_string(),
+            "--on-release".to_string(),
+            "echo stop".to_string(),
+            "--timeout".to_string(),
+            "5s".to_string(),
+        ];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: Some(Duration::from_secs(5)),
+                pid_file: None,
+                on_inhibit: Some("echo start".to_string()),
+                on_release: Some("echo stop".to_string()),
+                dry_run: true,
+            }))
+        );
     }
 }

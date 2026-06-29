@@ -83,6 +83,15 @@ Errors from
 .I CMD
 are silently ignored.
 .TP
+.BR \-\-dry\-run
+Run without connecting to the Wayland compositor.
+Hooks, timeout, and signals all function normally.
+Useful for testing
+.B \-\-on\-inhibit
+and
+.B \-\-on\-release
+commands without requiring a live compositor.
+.TP
 .BR \-h ", " \-\-help
 Print a short usage summary and exit.
 .TP

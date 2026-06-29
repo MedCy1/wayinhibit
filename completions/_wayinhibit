@@ -7,6 +7,7 @@ _wayinhibit() {
         '(-p --pid-file)'{-p,--pid-file}'[write PID to file on startup]:pid file:_files' \
         '--on-inhibit[run command when inhibition starts]:command (sh -c)' \
         '--on-release[run command when inhibition stops]:command (sh -c)' \
+        '--dry-run[run without connecting to Wayland]' \
         '(-h --help)'{-h,--help}'[print help and exit]' \
         '(-V --version)'{-V,--version}'[print version and exit]'
 }
