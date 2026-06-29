@@ -81,6 +81,38 @@ jobs:
           [ $STATUS -eq 1 ] || { echo "error: expected exit 1 when no compositor, got $STATUS"; exit 1; }
           echo "ok: exits with code 1 when compositor is unavailable"
 
+          PIDFILE=$(mktemp -u)
+          ./target/debug/wayinhibit --quiet --timeout 3s --pid-file "$PIDFILE" &
+          WINH_PID=$!
+          sleep 0.5
+          [ -f "$PIDFILE" ] || { echo "error: pid file was not created"; exit 1; }
+          grep -qE '^[0-9]+$' "$PIDFILE" || { echo "error: pid file does not contain a PID"; exit 1; }
+          wait $WINH_PID
+          [ ! -f "$PIDFILE" ] || { echo "error: pid file was not removed after exit"; exit 1; }
+          echo "ok: --pid-file created on start and removed on exit"
+
+          ./target/debug/wayinhibit --quiet -- sleep 30 &
+          WINH_PID=$!
+          sleep 0.3
+          kill -TERM $WINH_PID
+          wait $WINH_PID && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 143 ] || { echo "error: expected exit 143 (child killed by SIGTERM), got $STATUS"; exit 1; }
+          echo "ok: SIGTERM in command mode terminates child and propagates exit code"
+
+          ./target/debug/wayinhibit --quiet -- sh -c 'kill -9 $$' && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 137 ] || { echo "error: expected exit 137 (128+SIGKILL), got $STATUS"; exit 1; }
+          echo "ok: signal-killed child propagates 128+signal exit code"
+
+          ./target/debug/wayinhibit --help > /dev/null
+          echo "ok: --help exits 0"
+
+          ./target/debug/wayinhibit --version | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'
+          echo "ok: --version prints version number"
+
+          ./target/debug/wayinhibit --invalid-flag 2>/dev/null && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 2 ] || { echo "error: expected exit 2 for invalid args, got $STATUS"; exit 1; }
+          echo "ok: invalid args exits with code 2"
+
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload to Codecov
