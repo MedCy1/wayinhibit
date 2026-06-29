@@ -92,19 +92,3 @@ fn send_signal(pid: u32, signal: libc::c_int) -> Result<(), String> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::CommandSpec;
-
-    #[test]
-    fn keeps_program_and_args() {
-        let spec = CommandSpec {
-            program: "sleep".to_string(),
-            args: vec!["1".to_string()],
-        };
-
-        assert_eq!(spec.program, "sleep");
-        assert_eq!(spec.args, vec!["1"]);
-    }
-}

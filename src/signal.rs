@@ -32,7 +32,3 @@ pub fn install() -> Result<(), String> {
 pub fn is_stop_requested() -> bool {
     SHOULD_STOP.load(Ordering::Relaxed)
 }
-
-pub fn reset() {
-    SHOULD_STOP.store(false, Ordering::Relaxed);
-}

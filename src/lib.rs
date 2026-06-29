@@ -64,7 +64,6 @@ fn print_help() {
 }
 
 fn run(config: Config) -> Result<ExitCode, String> {
-    signal::reset();
     signal::install()?;
 
     let mut inhibitor = if config.dry_run {

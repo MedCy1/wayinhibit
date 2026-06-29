@@ -1,6 +1,5 @@
 .DEFAULT_GOAL := help
 
-CARGO ?= cargo
 QUALITY_SCRIPT := ./scripts/quality.sh
 INSTALL_HOOKS_SCRIPT := ./scripts/install-hooks.sh
 CMD ?=
@@ -26,32 +25,32 @@ quality-push: ## Run the pre-push quality checks
 	@$(QUALITY_SCRIPT) pre-push
 
 fmt: ## Check formatting
-	@$(CARGO) fmt --check
+	@cargo fmt --check
 
 check: ## Check compilation
-	@$(CARGO) check --locked
+	@cargo check --locked
 
 test: ## Run tests
-	@$(CARGO) test --locked
+	@cargo test --locked
 
 clippy: ## Run clippy with warnings denied
-	@$(CARGO) clippy --locked --all-targets -- -D warnings
+	@cargo clippy --locked --all-targets -- -D warnings
 
 run: ## Run wayinhibit in foreground mode
-	@$(CARGO) run
+	@cargo run
 
 run-command: ## Run a command under inhibition, pass CMD="sleep 10"
 	@if [ -z "$(CMD)" ]; then \
 		printf '%s\n' 'Usage: make run-command CMD="sleep 10"' >&2; \
 		exit 2; \
 	fi
-	@$(CARGO) run -- -- $(CMD)
+	@cargo run -- -- $(CMD)
 
 install: ## Install the binary locally with cargo using Cargo.lock
-	@$(CARGO) install --locked --path .
+	@cargo install --locked --path .
 
 clean: ## Remove Cargo build artifacts
-	@$(CARGO) clean
+	@cargo clean
 
 release: ## Release a new version: make release VERSION=x.y.z
 	@if [ -z "$(VERSION)" ]; then \

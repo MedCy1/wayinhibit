@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::child::CommandSpec;
 
-pub fn help_text(version: &str) -> String {
+pub(crate) fn help_text(version: &str) -> String {
     format!(
         "\
 wayinhibit {version}
