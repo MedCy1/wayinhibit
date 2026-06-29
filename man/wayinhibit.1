@@ -63,6 +63,26 @@ Useful for signaling
 .B wayinhibit
 from scripts or service managers.
 .TP
+.BR \-\-on\-inhibit " " \fICMD\fR
+Run
+.I CMD
+via
+.B sh -c
+immediately after idle inhibition starts.
+Errors from
+.I CMD
+are silently ignored.
+.TP
+.BR \-\-on\-release " " \fICMD\fR
+Run
+.I CMD
+via
+.B sh -c
+immediately before idle inhibition stops.
+Errors from
+.I CMD
+are silently ignored.
+.TP
 .BR \-h ", " \-\-help
 Print a short usage summary and exit.
 .TP

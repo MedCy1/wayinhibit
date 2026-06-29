@@ -15,11 +15,13 @@ Usage:
   wayinhibit [OPTIONS] -- <COMMAND> [ARG...]
 
 Options:
-  -t, --timeout <DURATION>  Stop after a given duration (e.g. 30s, 5m, 2h)
-  -q, --quiet               Suppress all output
-  -p, --pid-file <PATH>     Write PID to PATH on startup, remove it on exit
-  -h, --help                Print help
-  -V, --version             Print version
+  -t, --timeout <DURATION>      Stop after a given duration (e.g. 30s, 5m, 2h)
+  -q, --quiet                   Suppress all output
+  -p, --pid-file <PATH>         Write PID to PATH on startup, remove it on exit
+      --on-inhibit <CMD>        Run CMD (via sh -c) when inhibition starts
+      --on-release <CMD>        Run CMD (via sh -c) when inhibition stops
+  -h, --help                    Print help
+  -V, --version                 Print version
 "
     )
 }
@@ -30,6 +32,8 @@ pub struct Config {
     pub quiet: bool,
     pub timeout: Option<Duration>,
     pub pid_file: Option<PathBuf>,
+    pub on_inhibit: Option<String>,
+    pub on_release: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,6 +74,8 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             quiet: false,
             timeout: None,
             pid_file: None,
+            on_inhibit: None,
+            on_release: None,
         }));
     }
 
@@ -82,6 +88,8 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
     let mut quiet = false;
     let mut timeout = None;
     let mut pid_file = None;
+    let mut on_inhibit = None;
+    let mut on_release = None;
     let mut i = 0;
 
     while i < args.len() {
@@ -112,6 +120,34 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 }
                 pid_file = Some(PathBuf::from(val));
             }
+            "--on-inhibit" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "--on-inhibit requires a value".to_string())?;
+                on_inhibit = Some(val.clone());
+            }
+            flag if flag.starts_with("--on-inhibit=") => {
+                let val = flag.strip_prefix("--on-inhibit=").unwrap();
+                if val.is_empty() {
+                    return Err("--on-inhibit requires a value".to_string());
+                }
+                on_inhibit = Some(val.to_string());
+            }
+            "--on-release" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "--on-release requires a value".to_string())?;
+                on_release = Some(val.clone());
+            }
+            flag if flag.starts_with("--on-release=") => {
+                let val = flag.strip_prefix("--on-release=").unwrap();
+                if val.is_empty() {
+                    return Err("--on-release requires a value".to_string());
+                }
+                on_release = Some(val.to_string());
+            }
             "--" => break,
             other => {
                 return Err(format!(
@@ -141,6 +177,8 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
         quiet,
         timeout,
         pid_file,
+        on_inhibit,
+        on_release,
     }))
 }
 
@@ -162,6 +200,8 @@ mod tests {
                 quiet: false,
                 timeout: None,
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -192,6 +232,8 @@ mod tests {
                 quiet: false,
                 timeout: None,
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -221,6 +263,8 @@ mod tests {
                 quiet: true,
                 timeout: None,
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -235,6 +279,8 @@ mod tests {
                 quiet: true,
                 timeout: None,
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -257,6 +303,8 @@ mod tests {
                 quiet: true,
                 timeout: None,
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -271,6 +319,8 @@ mod tests {
                 quiet: false,
                 timeout: Some(Duration::from_secs(30)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -285,6 +335,8 @@ mod tests {
                 quiet: false,
                 timeout: Some(Duration::from_secs(300)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -299,6 +351,8 @@ mod tests {
                 quiet: false,
                 timeout: Some(Duration::from_secs(7200)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -321,6 +375,8 @@ mod tests {
                 quiet: false,
                 timeout: Some(Duration::from_secs(600)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -348,6 +404,8 @@ mod tests {
                 quiet: true,
                 timeout: Some(Duration::from_secs(300)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -362,6 +420,8 @@ mod tests {
                 quiet: false,
                 timeout: Some(Duration::from_secs(30)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -376,6 +436,8 @@ mod tests {
                 quiet: false,
                 timeout: Some(Duration::from_secs(300)),
                 pid_file: None,
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -402,6 +464,8 @@ mod tests {
                 quiet: false,
                 timeout: None,
                 pid_file: Some(PathBuf::from("/run/wayinhibit.pid")),
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -416,6 +480,8 @@ mod tests {
                 quiet: false,
                 timeout: None,
                 pid_file: Some(PathBuf::from("/tmp/wi.pid")),
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }
@@ -430,6 +496,8 @@ mod tests {
                 quiet: false,
                 timeout: None,
                 pid_file: Some(PathBuf::from("/tmp/wi.pid")),
+                on_inhibit: None,
+                on_release: None,
             }))
         );
     }

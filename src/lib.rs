@@ -76,6 +76,10 @@ fn run(config: Config) -> Result<ExitCode, String> {
         .map(PidFile::create)
         .transpose()?;
 
+    if let Some(ref cmd) = config.on_inhibit {
+        run_hook(cmd);
+    }
+
     let exit_code = match config.command {
         Some(command) => run_with_child(&mut inhibitor, command.spawn()?, config.quiet, deadline)?,
         None => run_until_stopped(&mut inhibitor, config.quiet, deadline)?,
@@ -83,11 +87,19 @@ fn run(config: Config) -> Result<ExitCode, String> {
 
     inhibitor.shutdown()?;
 
+    if let Some(ref cmd) = config.on_release {
+        run_hook(cmd);
+    }
+
     if !config.quiet {
         println!("\nStopped idle inhibition.");
     }
 
     Ok(exit_code)
+}
+
+fn run_hook(cmd: &str) {
+    let _ = std::process::Command::new("sh").arg("-c").arg(cmd).status();
 }
 
 fn run_until_stopped(

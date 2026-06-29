@@ -8,6 +8,12 @@ complete -c wayinhibit -s q -l quiet \
 complete -c wayinhibit -s p -l pid-file \
     -d 'Write PID to file on startup, remove it on exit' \
     -r -F
+complete -c wayinhibit -l on-inhibit \
+    -d 'Run command (via sh -c) when inhibition starts' \
+    -r
+complete -c wayinhibit -l on-release \
+    -d 'Run command (via sh -c) when inhibition stops' \
+    -r
 complete -c wayinhibit -s h -l help \
     -d 'Print help and exit'
 complete -c wayinhibit -s V -l version \
