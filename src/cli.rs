@@ -513,4 +513,97 @@ mod tests {
         let args = vec!["--pid-file=".to_string()];
         assert!(parse_args(&args).is_err());
     }
+
+    #[test]
+    fn parses_on_inhibit() {
+        let args = vec!["--on-inhibit".to_string(), "notify-send start".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: None,
+                on_inhibit: Some("notify-send start".to_string()),
+                on_release: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_on_release() {
+        let args = vec!["--on-release".to_string(), "notify-send stop".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: None,
+                on_inhibit: None,
+                on_release: Some("notify-send stop".to_string()),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_on_inhibit_inline_equals() {
+        let args = vec!["--on-inhibit=echo hello".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: None,
+                on_inhibit: Some("echo hello".to_string()),
+                on_release: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_on_inhibit_and_on_release_combined() {
+        let args = vec![
+            "--on-inhibit".to_string(),
+            "echo start".to_string(),
+            "--on-release".to_string(),
+            "echo stop".to_string(),
+        ];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: None,
+                on_inhibit: Some("echo start".to_string()),
+                on_release: Some("echo stop".to_string()),
+            }))
+        );
+    }
+
+    #[test]
+    fn rejects_on_inhibit_without_value() {
+        let args = vec!["--on-inhibit".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn rejects_on_release_without_value() {
+        let args = vec!["--on-release".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn rejects_on_inhibit_inline_equals_empty_value() {
+        let args = vec!["--on-inhibit=".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn rejects_on_release_inline_equals_empty_value() {
+        let args = vec!["--on-release=".to_string()];
+        assert!(parse_args(&args).is_err());
+    }
 }
