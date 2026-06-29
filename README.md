@@ -14,7 +14,9 @@ A small Wayland idle inhibitor written in Rust. Prevents your compositor from lo
 - **Timeout** — stop automatically after a given duration (`30s`, `5m`, `2h`)
 - **Quiet mode** — suppress all output for use in scripts
 - **Exit code propagation** — in command mode, exits with the same code as the wrapped command
-- **PID printed on startup** — makes it easy to signal from other scripts
+- **PID file** — write the PID to a file for signaling from scripts or status bars
+- **Hooks** — run shell commands when inhibition starts and stops
+- **Dry-run** — test hooks and scripts without a live compositor
 
 ## Installation
 
@@ -85,22 +87,78 @@ wayinhibit
 kill 12345
 ```
 
+Write the PID to a file so other scripts can signal it:
+
+```bash
+wayinhibit --quiet --pid-file /tmp/wayinhibit.pid &
+kill "$(cat /tmp/wayinhibit.pid)"
+```
+
+Run shell commands when inhibition starts and stops:
+
+```bash
+wayinhibit \
+  --on-inhibit  "notify-send wayinhibit 'Idle inhibited'" \
+  --on-release  "notify-send wayinhibit 'Idle released'"
+```
+
+Test your hooks without a live compositor:
+
+```bash
+wayinhibit --dry-run --timeout 5s \
+  --on-inhibit "echo start" \
+  --on-release "echo stop"
+```
+
 ## Options
 
 | Flag | Description |
 |---|---|
 | `-t`, `--timeout <DURATION>` | Stop after a given duration (`30s`, `5m`, `2h`) |
 | `-q`, `--quiet` | Suppress all output |
+| `-p`, `--pid-file <PATH>` | Write PID to `PATH` on startup, remove it on exit |
+| `--on-inhibit <CMD>` | Run `CMD` via `sh -c` when inhibition starts |
+| `--on-release <CMD>` | Run `CMD` via `sh -c` when inhibition stops |
+| `--dry-run` | Run without connecting to Wayland (for testing hooks) |
 | `-h`, `--help` | Print help |
 | `-V`, `--version` | Print version |
+
+## Waybar integration
+
+**Option 1 — Waybar built-in module** (no wayinhibit required):
+
+```json
+"idle_inhibitor": {
+    "format": "{icon}",
+    "format-icons": {
+        "activated": "󰒲",
+        "deactivated": "󰒳"
+    }
+}
+```
+
+**Option 2 — Custom module using wayinhibit** (supports hooks, pid-file, timeout):
+
+```json
+"custom/idle-inhibitor": {
+    "exec": "[ -f /tmp/wayinhibit.pid ] && echo '󰒲 inhibiting' || echo '󰒳 idle'",
+    "interval": 2,
+    "on-click": "[ -f /tmp/wayinhibit.pid ] && kill \"$(cat /tmp/wayinhibit.pid)\" || wayinhibit --quiet --pid-file /tmp/wayinhibit.pid &",
+    "tooltip": false
+}
+```
+
+Use option 2 if you want `--on-inhibit`/`--on-release` hooks, a timeout, or need to drive wayinhibit from other scripts as well.
 
 ## Compatibility
 
 Requires a compositor that supports the `zwp_idle_inhibit_manager_v1` Wayland protocol, which includes:
 
-- **wlroots-based**: Sway, Hyprland, river, labwc, wayfire
-- **GNOME** (Wayland session)
-- **KDE Plasma** (Wayland session)
+- **wlroots-based**: Sway, Hyprland, river, labwc, Wayfire, Cage, niri
+- **GNOME** (Mutter, Wayland session)
+- **KDE Plasma** (KWin, Wayland session)
+- **Cinnamon** (Muffin, Wayland session)
+- **COSMIC**, Mir, Louvre, phoc, Jay, Treeland
 
 ## Development
 
