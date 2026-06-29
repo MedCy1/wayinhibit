@@ -26,8 +26,62 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Generate coverage report
-        run: cargo llvm-cov --locked --lcov --output-path lcov.info
+      - name: Install sway
+        run: sudo apt-get install -y sway
+
+      - name: Generate coverage (unit + Wayland integration tests)
+        env:
+          WLR_BACKENDS: headless
+          WLR_RENDERER: pixman
+          WLR_LIBINPUT_NO_DEVICES: "1"
+        run: |
+          source <(cargo llvm-cov show-env --export-prefix)
+          cargo build --locked
+          cargo test --locked
+
+          export XDG_RUNTIME_DIR=$(mktemp -d)
+          sway -c /dev/null 2>/dev/null &
+          SWAY_PID=$!
+          trap "kill $SWAY_PID 2>/dev/null || true" EXIT
+
+          for i in $(seq 1 20); do
+            SOCKET=$(find "$XDG_RUNTIME_DIR" -name 'wayland-*' ! -name '*.lock' 2>/dev/null | head -1)
+            [ -n "$SOCKET" ] && break
+            sleep 0.5
+          done
+          [ -n "$SOCKET" ] || { echo "error: sway failed to start"; exit 1; }
+
+          export WAYLAND_DISPLAY=$(basename "$SOCKET")
+
+          ./target/debug/wayinhibit --quiet --timeout 1s
+          echo "ok: foreground mode with timeout"
+
+          ./target/debug/wayinhibit --quiet --timeout 5s -- true
+          echo "ok: child command mode"
+
+          ./target/debug/wayinhibit --quiet --timeout 5s -- sh -c 'exit 42' && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 42 ] || { echo "error: expected exit code 42, got $STATUS"; exit 1; }
+          echo "ok: child exit code is propagated"
+
+          output=$(./target/debug/wayinhibit --timeout 1s 2>&1)
+          [ -n "$output" ] || { echo "error: expected output in non-quiet mode"; exit 1; }
+          output=$(./target/debug/wayinhibit --quiet --timeout 1s 2>&1)
+          [ -z "$output" ] || { echo "error: --quiet should suppress output, got: $output"; exit 1; }
+          echo "ok: --quiet suppresses all output"
+
+          ./target/debug/wayinhibit --timeout 30s &
+          WINH_PID=$!
+          sleep 0.3
+          kill -TERM $WINH_PID
+          wait $WINH_PID && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 0 ] || { echo "error: expected exit 0 on SIGTERM, got $STATUS"; exit 1; }
+          echo "ok: SIGTERM stops cleanly with exit code 0"
+
+          WAYLAND_DISPLAY=nonexistent ./target/debug/wayinhibit --timeout 1s 2>/dev/null && STATUS=0 || STATUS=$?
+          [ $STATUS -eq 1 ] || { echo "error: expected exit 1 when no compositor, got $STATUS"; exit 1; }
+          echo "ok: exits with code 1 when compositor is unavailable"
+
+          cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v7
@@ -74,74 +128,6 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
-
-  integration-test:
-    name: Wayland integration test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo registry and build artifacts
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install sway
-        run: sudo apt-get install -y sway
-
-      - name: Build
-        run: cargo build --locked
-
-      - name: Run Wayland integration tests
-        env:
-          WLR_BACKENDS: headless
-          WLR_RENDERER: pixman
-          WLR_LIBINPUT_NO_DEVICES: "1"
-        run: |
-          export XDG_RUNTIME_DIR=$(mktemp -d)
-          sway -c /dev/null 2>/dev/null &
-          SWAY_PID=$!
-          trap "kill $SWAY_PID 2>/dev/null || true" EXIT
-
-          for i in $(seq 1 20); do
-            SOCKET=$(find "$XDG_RUNTIME_DIR" -name 'wayland-*' ! -name '*.lock' 2>/dev/null | head -1)
-            [ -n "$SOCKET" ] && break
-            sleep 0.5
-          done
-          [ -n "$SOCKET" ] || { echo "error: sway failed to start"; exit 1; }
-
-          export WAYLAND_DISPLAY=$(basename "$SOCKET")
-
-          ./target/debug/wayinhibit --quiet --timeout 1s
-          echo "ok: foreground mode with timeout"
-
-          ./target/debug/wayinhibit --quiet --timeout 5s -- true
-          echo "ok: child command mode"
-
-          ./target/debug/wayinhibit --quiet --timeout 5s -- sh -c 'exit 42' && STATUS=0 || STATUS=$?
-          [ $STATUS -eq 42 ] || { echo "error: expected exit code 42, got $STATUS"; exit 1; }
-          echo "ok: child exit code is propagated"
-
-          output=$(./target/debug/wayinhibit --timeout 1s 2>&1)
-          [ -n "$output" ] || { echo "error: expected output in non-quiet mode"; exit 1; }
-          output=$(./target/debug/wayinhibit --quiet --timeout 1s 2>&1)
-          [ -z "$output" ] || { echo "error: --quiet should suppress output, got: $output"; exit 1; }
-          echo "ok: --quiet suppresses all output"
-
-          ./target/debug/wayinhibit --timeout 30s &
-          WINH_PID=$!
-          sleep 0.3
-          kill -TERM $WINH_PID
-          wait $WINH_PID && STATUS=0 || STATUS=$?
-          [ $STATUS -eq 0 ] || { echo "error: expected exit 0 on SIGTERM, got $STATUS"; exit 1; }
-          echo "ok: SIGTERM stops cleanly with exit code 0"
-
-          WAYLAND_DISPLAY=nonexistent ./target/debug/wayinhibit --timeout 1s 2>/dev/null && STATUS=0 || STATUS=$?
-          [ $STATUS -eq 1 ] || { echo "error: expected exit 1 when no compositor, got $STATUS"; exit 1; }
-          echo "ok: exits with code 1 when compositor is unavailable"
 
   msrv:
     name: Minimum supported Rust version
