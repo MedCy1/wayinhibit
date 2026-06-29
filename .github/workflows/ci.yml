@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -128,7 +128,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -139,7 +139,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -167,7 +167,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Rust 1.85
         uses: dtolnay/rust-toolchain@1.85
@@ -185,7 +185,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install namcap
         run: pacman -Sy --noconfirm namcap
