@@ -1,6 +1,20 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.7.0] - 2026-06-29
+
+### CI & Automation
+
+- Merge integration tests into coverage job for full Wayland coverage
+- Add integration tests for pid-file, SIGTERM in command mode, signal exit codes, --help, --version
+
+### Documentation
+
+- Add pull request template
+
+### Features
+
+- Add --on-inhibit and --on-release hooks
 ## [0.6.2] - 2026-06-29
 
 ### Bug Fixes
