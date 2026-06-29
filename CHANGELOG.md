@@ -1,6 +1,19 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.0.0] - 2026-06-29
+
+### Documentation
+
+- Update README with new flags and Waybar integration
+
+### Features
+
+- Add --dry-run flag
+
+### Testing
+
+- Add unit tests for --on-inhibit and --on-release
 ## [0.7.0] - 2026-06-29
 
 ### CI & Automation
