@@ -53,7 +53,11 @@ impl IdleInhibitor {
             .map_err(|err| format!("failed to bind wl_compositor: {err}"))?;
         let inhibitor_manager: ZwpIdleInhibitManagerV1 = globals
             .bind(&qh, 1..=1, ())
-            .map_err(|err| format!("idle inhibit protocol is not available: {err}"))?;
+            .map_err(|_| {
+                "your compositor does not support idle inhibition (zwp_idle_inhibit_manager_v1).\n\
+                 Supported compositors: Sway, Hyprland, river, labwc, GNOME (Wayland), KDE Plasma (Wayland)."
+                    .to_owned()
+            })?;
 
         let surface = compositor.create_surface(&qh, ());
         let inhibitor = inhibitor_manager.create_inhibitor(&surface, &qh, ());
