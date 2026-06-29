@@ -1,6 +1,17 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.6.2] - 2026-06-29
+
+### Bug Fixes
+
+- Update supported compositor list in error message
+
+### CI & Automation
+
+- Restore MSRV toolchain to 1.85 (not a bumped action version)
+- Ignore dtolnay/rust-toolchain in dependabot (version is Rust MSRV, not action)
+- Bump codecov-action from v5 to v7 (Node.js 24)
 ## [0.6.1] - 2026-06-29
 
 ### Bug Fixes
