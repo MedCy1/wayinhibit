@@ -94,6 +94,19 @@ wait $WINH_PID && STATUS=0 || STATUS=$?
 [ $STATUS -eq 143 ] || { echo "error: expected exit 143 (child killed by SIGTERM) on SIGHUP, got $STATUS"; exit 1; }
 echo "ok: SIGHUP triggers the same graceful shutdown as SIGTERM"
 
+GRANDCHILD_PIDFILE=$(mktemp -u)
+"$bin" --quiet -- sh -c "sleep 30 & echo \$! > $GRANDCHILD_PIDFILE; wait" &
+WINH_PID=$!
+sleep 0.5
+GRANDCHILD_PID=$(cat "$GRANDCHILD_PIDFILE")
+kill -0 "$GRANDCHILD_PID" || { echo "error: grandchild did not start"; exit 1; }
+kill -TERM $WINH_PID
+wait $WINH_PID 2>/dev/null
+sleep 0.3
+kill -0 "$GRANDCHILD_PID" 2>/dev/null && { echo "error: grandchild survived SIGTERM to wayinhibit"; exit 1; }
+rm -f "$GRANDCHILD_PIDFILE"
+echo "ok: SIGTERM reaches the wrapped command's own background children"
+
 "$bin" --quiet -- sh -c 'kill -9 $$' && STATUS=0 || STATUS=$?
 [ $STATUS -eq 137 ] || { echo "error: expected exit 137 (128+SIGKILL), got $STATUS"; exit 1; }
 echo "ok: signal-killed child propagates 128+signal exit code"
