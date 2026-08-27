@@ -2,9 +2,10 @@
 
 QUALITY_SCRIPT := ./scripts/quality.sh
 INSTALL_HOOKS_SCRIPT := ./scripts/install-hooks.sh
+E2E_SCRIPT := ./scripts/e2e-test.sh
 CMD ?=
 
-.PHONY: help setup hooks quality quality-commit quality-push fmt check test clippy run run-command install clean release
+.PHONY: help setup hooks quality quality-commit quality-push fmt check test clippy e2e run run-command install clean release
 
 help: ## Show available targets
 	@printf '%s\n' 'Available targets:'
@@ -35,6 +36,10 @@ test: ## Run tests
 
 clippy: ## Run clippy with warnings denied
 	@cargo clippy --locked --all-targets -- -D warnings
+
+e2e: ## Run end-to-end tests against a real (headless) Sway; requires `sway` on PATH
+	@cargo build --locked
+	@$(E2E_SCRIPT) target/debug/wayinhibit
 
 run: ## Run wayinhibit in foreground mode
 	@cargo run

@@ -190,6 +190,7 @@ Individual checks:
 make fmt      # Check formatting
 make clippy   # Run Clippy
 make test     # Run tests
+make e2e      # Run end-to-end tests against a real headless Sway (requires `sway`)
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more details.

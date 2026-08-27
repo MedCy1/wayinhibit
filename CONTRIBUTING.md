@@ -4,6 +4,7 @@
 
 - Rust stable toolchain
 - A Wayland compositor that supports `zwp_idle_inhibit_manager_v1` for manual testing
+- `sway` on `PATH` to run the end-to-end test suite (`make e2e`)
 
 ## Setup
 
@@ -19,6 +20,7 @@ The hooks run formatting and Clippy checks on commit, and compilation and tests 
 
 ```bash
 make quality       # Run the full quality suite
+make e2e           # Run end-to-end tests against a real headless Sway
 make run           # Run wayinhibit in foreground mode
 make run-command CMD="sleep 5"  # Run a command under inhibition
 ```
