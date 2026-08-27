@@ -69,6 +69,15 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
     ))
 }
 
+/// Extracts the value out of an inline `--flag=value` argument, rejecting an empty value.
+fn inline_value<'a>(flag: &'a str, prefix: &str) -> Result<&'a str, String> {
+    let val = flag.strip_prefix(prefix).unwrap_or_default();
+    if val.is_empty() {
+        return Err(format!("{} requires a value", prefix.trim_end_matches('=')));
+    }
+    Ok(val)
+}
+
 pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
     if args.is_empty() {
         return Ok(ParseOutcome::Run(Config {
@@ -107,7 +116,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 timeout = Some(parse_duration(val)?);
             }
             flag if flag.starts_with("--timeout=") => {
-                let val = flag.strip_prefix("--timeout=").unwrap();
+                let val = inline_value(flag, "--timeout=")?;
                 timeout = Some(parse_duration(val)?);
             }
             "-p" | "--pid-file" => {
@@ -118,10 +127,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 pid_file = Some(PathBuf::from(val));
             }
             flag if flag.starts_with("--pid-file=") => {
-                let val = flag.strip_prefix("--pid-file=").unwrap();
-                if val.is_empty() {
-                    return Err("--pid-file requires a value".to_string());
-                }
+                let val = inline_value(flag, "--pid-file=")?;
                 pid_file = Some(PathBuf::from(val));
             }
             "--on-inhibit" => {
@@ -132,11 +138,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 on_inhibit = Some(val.clone());
             }
             flag if flag.starts_with("--on-inhibit=") => {
-                let val = flag.strip_prefix("--on-inhibit=").unwrap();
-                if val.is_empty() {
-                    return Err("--on-inhibit requires a value".to_string());
-                }
-                on_inhibit = Some(val.to_string());
+                on_inhibit = Some(inline_value(flag, "--on-inhibit=")?.to_string());
             }
             "--on-release" => {
                 i += 1;
@@ -146,11 +148,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 on_release = Some(val.clone());
             }
             flag if flag.starts_with("--on-release=") => {
-                let val = flag.strip_prefix("--on-release=").unwrap();
-                if val.is_empty() {
-                    return Err("--on-release requires a value".to_string());
-                }
-                on_release = Some(val.to_string());
+                on_release = Some(inline_value(flag, "--on-release=")?.to_string());
             }
             "--dry-run" => dry_run = true,
             "--" => break,
