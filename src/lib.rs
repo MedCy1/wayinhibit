@@ -137,14 +137,23 @@ fn run_hook(cmd: &str) {
     let _ = std::process::Command::new("sh").arg("-c").arg(cmd).status();
 }
 
+/// Ticks the Wayland connection. If it has broken (compositor crash or restart), this
+/// degrades to a plain sleep instead of failing the whole run: the caller (foreground loop
+/// or wrapped command) keeps going, exit codes and hooks still fire normally, just without
+/// idle inhibition for the remainder of the run.
 fn tick(inhibitor: &mut Option<IdleInhibitor>) -> Result<(), String> {
-    match inhibitor {
-        Some(inh) => inh.tick(),
-        None => {
-            std::thread::sleep(Duration::from_millis(250));
-            Ok(())
-        }
+    let Some(inh) = inhibitor.as_mut() else {
+        std::thread::sleep(Duration::from_millis(250));
+        return Ok(());
+    };
+
+    if let Err(err) = inh.tick() {
+        eprintln!(
+            "{BIN_NAME}: lost the Wayland connection ({err}); continuing without idle inhibition."
+        );
+        *inhibitor = None;
     }
+    Ok(())
 }
 
 fn run_until_stopped(
