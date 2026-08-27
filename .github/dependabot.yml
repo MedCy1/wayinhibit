@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      cargo-updates:
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -11,3 +14,6 @@ updates:
       interval: weekly
     ignore:
       - dependency-name: dtolnay/rust-toolchain
+    groups:
+      actions-updates:
+        update-types: ["patch", "minor"]
