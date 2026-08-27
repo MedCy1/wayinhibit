@@ -86,9 +86,26 @@ wait $WINH_PID && STATUS=0 || STATUS=$?
 [ $STATUS -eq 143 ] || { echo "error: expected exit 143 (child killed by SIGTERM), got $STATUS"; exit 1; }
 echo "ok: SIGTERM in command mode terminates child and propagates exit code"
 
+"$bin" --quiet -- sleep 30 &
+WINH_PID=$!
+sleep 0.3
+kill -HUP $WINH_PID
+wait $WINH_PID && STATUS=0 || STATUS=$?
+[ $STATUS -eq 143 ] || { echo "error: expected exit 143 (child killed by SIGTERM) on SIGHUP, got $STATUS"; exit 1; }
+echo "ok: SIGHUP triggers the same graceful shutdown as SIGTERM"
+
 "$bin" --quiet -- sh -c 'kill -9 $$' && STATUS=0 || STATUS=$?
 [ $STATUS -eq 137 ] || { echo "error: expected exit 137 (128+SIGKILL), got $STATUS"; exit 1; }
 echo "ok: signal-killed child propagates 128+signal exit code"
+
+# From here on the compositor is gone: this must be the last test that needs one.
+"$bin" --quiet -- sh -c 'sleep 2; exit 7' &
+WINH_PID=$!
+sleep 0.3
+kill -9 $SWAY_PID
+wait $WINH_PID && STATUS=0 || STATUS=$?
+[ $STATUS -eq 7 ] || { echo "error: expected exit 7 after compositor crash, got $STATUS"; exit 1; }
+echo "ok: child exit code still propagates after the Wayland connection is lost mid-run"
 
 "$bin" --help > /dev/null
 echo "ok: --help exits 0"
