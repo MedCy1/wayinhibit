@@ -63,7 +63,28 @@ fn print_help() {
     print!("{}", cli::help_text(VERSION));
 }
 
+/// Reads a PID file and returns the PID if the process it names is still alive.
+fn running_pid(path: &Path) -> Option<u32> {
+    let pid: u32 = std::fs::read_to_string(path).ok()?.trim().parse().ok()?;
+    let signed_pid = i32::try_from(pid).ok()?;
+    // Signal 0 sends nothing; it only checks whether the process exists.
+    (unsafe { libc::kill(signed_pid, 0) } == 0).then_some(pid)
+}
+
 fn run(config: Config) -> Result<ExitCode, String> {
+    if config.toggle {
+        let pid_path = config
+            .pid_file
+            .as_deref()
+            .expect("cli::parse_args guarantees --toggle implies --pid-file");
+        if let Some(pid) = running_pid(pid_path) {
+            child::send_signal(pid, libc::SIGTERM)
+                .map_err(|err| format!("failed to stop running instance (PID {pid}): {err}"))?;
+            return Ok(ExitCode::SUCCESS);
+        }
+        // No running instance: fall through and start one normally.
+    }
+
     signal::install()?;
 
     let mut inhibitor = if config.dry_run {

@@ -21,6 +21,7 @@ Options:
       --on-inhibit <CMD>        Run CMD (via sh -c) when inhibition starts
       --on-release <CMD>        Run CMD (via sh -c) when inhibition stops
       --dry-run                 Run without connecting to Wayland (for testing hooks)
+      --toggle                 Stop the running instance from --pid-file, or start one
   -h, --help                    Print help
   -V, --version                 Print version
 "
@@ -36,6 +37,7 @@ pub struct Config {
     pub on_inhibit: Option<String>,
     pub on_release: Option<String>,
     pub dry_run: bool,
+    pub toggle: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +90,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             on_inhibit: None,
             on_release: None,
             dry_run: false,
+            toggle: false,
         }));
     }
 
@@ -103,6 +106,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
     let mut on_inhibit = None;
     let mut on_release = None;
     let mut dry_run = false;
+    let mut toggle = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -151,6 +155,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 on_release = Some(inline_value(flag, "--on-release=")?.to_string());
             }
             "--dry-run" => dry_run = true,
+            "--toggle" => toggle = true,
             "--" => break,
             other => {
                 return Err(format!(
@@ -160,6 +165,10 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             }
         }
         i += 1;
+    }
+
+    if toggle && pid_file.is_none() {
+        return Err("--toggle requires --pid-file".to_string());
     }
 
     let command = if i < args.len() && args[i] == "--" {
@@ -183,6 +192,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
         on_inhibit,
         on_release,
         dry_run,
+        toggle,
     }))
 }
 
@@ -207,6 +217,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -240,6 +251,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -272,6 +284,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -289,6 +302,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -314,6 +328,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -331,6 +346,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -348,6 +364,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -365,6 +382,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -390,6 +408,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -420,6 +439,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -437,6 +457,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -454,6 +475,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -483,6 +505,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -500,6 +523,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -517,6 +541,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -546,6 +571,7 @@ mod tests {
                 on_inhibit: Some("notify-send start".to_string()),
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -563,6 +589,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: Some("notify-send stop".to_string()),
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -580,6 +607,7 @@ mod tests {
                 on_inhibit: Some("echo hello".to_string()),
                 on_release: None,
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -602,6 +630,7 @@ mod tests {
                 on_inhibit: Some("echo start".to_string()),
                 on_release: Some("echo stop".to_string()),
                 dry_run: false,
+                toggle: false,
             }))
         );
     }
@@ -643,6 +672,7 @@ mod tests {
                 on_inhibit: None,
                 on_release: None,
                 dry_run: true,
+                toggle: false,
             }))
         );
     }
@@ -668,7 +698,39 @@ mod tests {
                 on_inhibit: Some("echo start".to_string()),
                 on_release: Some("echo stop".to_string()),
                 dry_run: true,
+                toggle: false,
             }))
+        );
+    }
+
+    #[test]
+    fn parses_toggle_with_pid_file() {
+        let args = vec![
+            "--toggle".to_string(),
+            "--pid-file".to_string(),
+            "/tmp/wayinhibit.pid".to_string(),
+        ];
+        assert_eq!(
+            parse_args(&args),
+            Ok(ParseOutcome::Run(Config {
+                command: None,
+                quiet: false,
+                timeout: None,
+                pid_file: Some(PathBuf::from("/tmp/wayinhibit.pid")),
+                on_inhibit: None,
+                on_release: None,
+                dry_run: false,
+                toggle: true,
+            }))
+        );
+    }
+
+    #[test]
+    fn rejects_toggle_without_pid_file() {
+        let args = vec!["--toggle".to_string()];
+        assert_eq!(
+            parse_args(&args),
+            Err("--toggle requires --pid-file".to_string())
         );
     }
 }

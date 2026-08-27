@@ -79,7 +79,7 @@ fn exit_code_from_status(status: ExitStatus) -> u8 {
     1
 }
 
-fn send_signal(pid: u32, signal: libc::c_int) -> Result<(), String> {
+pub(crate) fn send_signal(pid: u32, signal: libc::c_int) -> Result<(), String> {
     let pid = i32::try_from(pid).map_err(|_| "child process id is out of range".to_string())?;
 
     let result = unsafe { libc::kill(pid, signal) };

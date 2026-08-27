@@ -16,6 +16,8 @@ complete -c wayinhibit -l on-release \
     -r
 complete -c wayinhibit -l dry-run \
     -d 'Run without connecting to Wayland (for testing hooks)'
+complete -c wayinhibit -l toggle \
+    -d 'Stop the running instance from --pid-file, or start one'
 complete -c wayinhibit -s h -l help \
     -d 'Print help and exit'
 complete -c wayinhibit -s V -l version \

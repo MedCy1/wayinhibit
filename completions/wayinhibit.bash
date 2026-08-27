@@ -27,7 +27,7 @@ _wayinhibit() {
     esac
 
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "-t --timeout -q --quiet -p --pid-file --on-inhibit --on-release --dry-run -h --help -V --version" -- "$cur"))
+        COMPREPLY=($(compgen -W "-t --timeout -q --quiet -p --pid-file --on-inhibit --on-release --dry-run --toggle -h --help -V --version" -- "$cur"))
     fi
 }
 

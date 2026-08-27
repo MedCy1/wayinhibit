@@ -8,6 +8,7 @@ _wayinhibit() {
         '--on-inhibit[run command when inhibition starts]:command (sh -c)' \
         '--on-release[run command when inhibition stops]:command (sh -c)' \
         '--dry-run[run without connecting to Wayland]' \
+        '--toggle[stop the running instance from --pid-file, or start one]' \
         '(-h --help)'{-h,--help}'[print help and exit]' \
         '(-V --version)'{-V,--version}'[print version and exit]'
 }

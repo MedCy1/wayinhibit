@@ -17,6 +17,7 @@ A small Wayland idle inhibitor written in Rust. Prevents your compositor from lo
 - **PID file** — write the PID to a file for signaling from scripts or status bars
 - **Hooks** — run shell commands when inhibition starts and stops
 - **Dry-run** — test hooks and scripts without a live compositor
+- **Toggle** — start/stop from a single keybind or status bar click
 
 ## Installation
 
@@ -110,6 +111,12 @@ wayinhibit --dry-run --timeout 5s \
   --on-release "echo stop"
 ```
 
+Toggle inhibition from a single command (starts it if not running, stops it if running) — handy for a keybind or a status bar click handler:
+
+```bash
+wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
+```
+
 ## Options
 
 | Flag | Description |
@@ -120,6 +127,7 @@ wayinhibit --dry-run --timeout 5s \
 | `--on-inhibit <CMD>` | Run `CMD` via `sh -c` when inhibition starts |
 | `--on-release <CMD>` | Run `CMD` via `sh -c` when inhibition stops |
 | `--dry-run` | Run without connecting to Wayland (for testing hooks) |
+| `--toggle` | Stop the running instance from `--pid-file`, or start one |
 | `-h`, `--help` | Print help |
 | `-V`, `--version` | Print version |
 
@@ -143,7 +151,7 @@ wayinhibit --dry-run --timeout 5s \
 "custom/idle-inhibitor": {
     "exec": "[ -f /tmp/wayinhibit.pid ] && echo '󰒲 inhibiting' || echo '󰒳 idle'",
     "interval": 2,
-    "on-click": "[ -f /tmp/wayinhibit.pid ] && kill \"$(cat /tmp/wayinhibit.pid)\" || wayinhibit --quiet --pid-file /tmp/wayinhibit.pid &",
+    "on-click": "wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid &",
     "tooltip": false
 }
 ```
@@ -159,6 +167,8 @@ Requires a compositor that supports the `zwp_idle_inhibit_manager_v1` Wayland pr
 - **KDE Plasma** (KWin, Wayland session)
 - **Cinnamon** (Muffin, Wayland session)
 - **COSMIC**, Mir, Louvre, phoc, Jay, Treeland
+
+`wayinhibit` only inhibits the compositor's idle state (screen lock, screen off). It does not prevent `systemd-logind` from suspending the system on events it handles itself, such as closing a laptop lid.
 
 ## Development
 

@@ -92,6 +92,13 @@ and
 .B \-\-on\-release
 commands without requiring a live compositor.
 .TP
+.BR \-\-toggle
+Stop the running instance recorded in
+.B \-\-pid\-file
+if one is alive, otherwise start a new one.
+Requires
+.BR \-\-pid\-file .
+.TP
 .BR \-h ", " \-\-help
 Print a short usage summary and exit.
 .TP
@@ -154,6 +161,15 @@ Run a backup script silently and propagate its exit code:
 wayinhibit \-\-quiet \-\- ./backup.sh
 .EE
 .RE
+.PP
+Toggle inhibition on and off, e.g.\& bound to a keyboard shortcut or a
+status bar click handler:
+.PP
+.RS 4
+.EX
+wayinhibit \-\-quiet \-\-toggle \-\-pid\-file /tmp/wayinhibit.pid
+.EE
+.RE
 .
 .SH NOTES
 The
@@ -172,6 +188,13 @@ can be signaled from scripts:
 kill $(wayinhibit | grep -o 'PID: [0-9]*' | grep -o '[0-9]*')
 .EE
 .RE
+.PP
+.B wayinhibit
+only inhibits the compositor's idle state (screen lock, screen off).
+It does not prevent
+.B systemd\-logind
+from suspending the system on events it handles itself, such as a
+laptop lid close.
 .
 .SH SEE ALSO
 .BR wayland (7),
