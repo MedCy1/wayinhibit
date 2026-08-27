@@ -101,7 +101,7 @@ sleep 0.5
 GRANDCHILD_PID=$(cat "$GRANDCHILD_PIDFILE")
 kill -0 "$GRANDCHILD_PID" || { echo "error: grandchild did not start"; exit 1; }
 kill -TERM $WINH_PID
-wait $WINH_PID 2>/dev/null
+wait $WINH_PID 2>/dev/null || true
 sleep 0.3
 kill -0 "$GRANDCHILD_PID" 2>/dev/null && { echo "error: grandchild survived SIGTERM to wayinhibit"; exit 1; }
 rm -f "$GRANDCHILD_PIDFILE"
