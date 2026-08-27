@@ -12,17 +12,13 @@ pub fn install() -> Result<(), String> {
         action.sa_sigaction = handle_shutdown_signal as *const () as libc::sighandler_t;
         action.sa_flags = libc::SA_RESTART;
 
-        if libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut()) == -1 {
-            return Err(format!(
-                "failed to install SIGINT handler: {}",
-                std::io::Error::last_os_error()
-            ));
-        }
-        if libc::sigaction(libc::SIGTERM, &action, std::ptr::null_mut()) == -1 {
-            return Err(format!(
-                "failed to install SIGTERM handler: {}",
-                std::io::Error::last_os_error()
-            ));
+        for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
+            if libc::sigaction(signal, &action, std::ptr::null_mut()) == -1 {
+                return Err(format!(
+                    "failed to install handler for signal {signal}: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
         }
     }
 
