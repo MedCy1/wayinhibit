@@ -122,26 +122,29 @@ fn stderr(output: &Output) -> String {
 }
 
 #[test]
-fn a_second_instance_is_refused_and_leaves_the_first_alone() {
-    let sandbox = Sandbox::new("refuse");
+fn a_second_instance_still_does_its_job_and_leaves_the_pid_file_to_the_first() {
+    let sandbox = Sandbox::new("second");
     let pid_file = sandbox.pid_file();
     let mut first = start_owner(&pid_file, &[]);
 
-    let second = command(&pid_file, &[]).output().unwrap();
-    assert_eq!(second.status.code(), Some(1));
+    // A command wrapped by a second instance must run: the pid file is only bookkeeping.
+    let marker = sandbox.path("ran");
+    let script = format!("echo ran > '{}'", marker.display());
+    let second = command(&pid_file, &["--", "sh", "-c", &script])
+        .output()
+        .unwrap();
+    assert_eq!(second.status.code(), Some(0), "{}", stderr(&second));
     let message = stderr(&second);
-    assert!(message.contains("already running"), "{message}");
+    assert!(message.contains("warning"), "{message}");
     assert!(
-        message.contains(&format!("PID {}", first.id())),
+        message.contains(&format!("in use by PID {}", first.id())),
         "{message}"
     );
+    assert!(marker.exists(), "the wrapped command must have run");
 
+    // The second instance exiting must not take the first one's file with it.
     assert!(first.try_wait().is_none(), "first instance must survive");
-    assert_eq!(
-        read_pid(&pid_file),
-        Some(first.id()),
-        "its pid file must survive"
-    );
+    assert_eq!(read_pid(&pid_file), Some(first.id()));
 
     first.signal(libc::SIGTERM);
     assert_eq!(first.wait().code(), Some(0));
@@ -293,19 +296,21 @@ fn a_failed_wayland_connection_does_not_leave_a_pid_file_behind() {
     assert!(!pid_file.exists());
 }
 
-/// The core guarantee: however many instances start at the same instant, their lifetimes
-/// never overlap. Each winner logs `start`, holds for a moment, then logs `end`; if two ever
-/// ran together the log would show `start start`.
+/// The core guarantee: however many instances start at the same instant, the pid file never
+/// has two owners. Each instance's command checks, once at its start and once at its end,
+/// whether the file names its parent (i.e. whether that instance owns it) and logs only if so.
+/// If two owners ever overlapped, the log would show `start start`.
 #[test]
-fn simultaneous_starts_never_run_two_instances_at_once() {
+fn simultaneous_starts_never_give_the_pid_file_two_owners() {
     const ROUNDS: usize = 15;
     const CONTENDERS: usize = 16;
 
     let sandbox = Sandbox::new("race");
     let pid_file = sandbox.pid_file();
     let log = sandbox.path("log");
+    let owns = format!("[ \"$(cat '{}')\" = \"$PPID\" ]", pid_file.display());
     let script = format!(
-        "echo start >> '{log}'; sleep 0.2; echo end >> '{log}'",
+        "{owns} && echo start >> '{log}'; sleep 0.2; {owns} && echo end >> '{log}'; true",
         log = log.display()
     );
 
@@ -314,34 +319,36 @@ fn simultaneous_starts_never_run_two_instances_at_once() {
             .map(|_| spawn(&pid_file, &["--", "sh", "-c", &script]))
             .collect();
 
-        let mut winners = 0;
+        let mut without_pid_file = 0;
         for contender in contenders {
             let output = contender.finish();
-            match output.status.code() {
-                Some(0) => winners += 1,
-                Some(1) => {
-                    let message = stderr(&output);
-                    assert!(
-                        message.contains("already running"),
-                        "round {round}: {message}"
-                    );
-                }
-                other => panic!(
-                    "round {round}: unexpected exit {other:?}: {}",
-                    stderr(&output)
-                ),
+            assert_eq!(
+                output.status.code(),
+                Some(0),
+                "round {round}: {}",
+                stderr(&output)
+            );
+            let message = stderr(&output);
+            if message.is_empty() {
+                continue; // an owner
             }
+            assert!(
+                message.contains("already in use"),
+                "round {round}: {message}"
+            );
+            without_pid_file += 1;
         }
 
         let log_text = std::fs::read_to_string(&log).unwrap();
         let events: Vec<&str> = log_text.lines().collect();
-        assert!(winners >= 1, "round {round}: nobody won");
-        assert_eq!(events.len(), winners * 2, "round {round}: {events:?}");
+        let owners = CONTENDERS - without_pid_file;
+        assert!(owners >= 1, "round {round}: nobody owned the file");
+        assert_eq!(events.len(), owners * 2, "round {round}: {events:?}");
         for pair in events.chunks(2) {
             assert_eq!(
                 pair,
                 ["start", "end"],
-                "round {round}: overlap in {events:?}"
+                "round {round}: two owners at once: {events:?}"
             );
         }
         assert!(!pid_file.exists(), "round {round}: pid file left behind");

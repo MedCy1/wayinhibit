@@ -95,9 +95,14 @@ wayinhibit --quiet --pid-file /tmp/wayinhibit.pid &
 kill "$(cat /tmp/wayinhibit.pid)"
 ```
 
-The file is locked for as long as wayinhibit runs, so a second instance started with the same
-path exits with an error instead of silently replacing it. The lock is released by the system
-when wayinhibit stops, even if it crashes, so a leftover file never blocks the next start.
+The file is locked for as long as wayinhibit runs, so it always names the instance that owns it.
+A second instance started with the same path still does its job (inhibiting idle, running its
+command) but prints a warning and leaves the file alone. The lock is released by the system when
+wayinhibit stops, even if it crashes, so a leftover file never blocks the next start.
+
+Keep the PID file on a local filesystem (`/tmp`, `$XDG_RUNTIME_DIR`). On a filesystem that cannot
+lock files, wayinhibit warns and falls back to a best-effort check, which can misjudge when two
+instances start at the same moment.
 
 Run shell commands when inhibition starts and stops:
 
@@ -127,7 +132,7 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 |---|---|
 | `-t`, `--timeout <DURATION>` | Stop after a given duration (`30s`, `5m`, `2h`) |
 | `-q`, `--quiet` | Suppress all output |
-| `-p`, `--pid-file <PATH>` | Write PID to `PATH` on startup, remove it on exit. The file is locked while wayinhibit runs: only one instance can use a given path |
+| `-p`, `--pid-file <PATH>` | Write PID to `PATH` on startup, remove it on exit. The file is locked while wayinhibit runs, so it names its owner |
 | `--on-inhibit <CMD>` | Run `CMD` via `sh -c` when inhibition starts |
 | `--on-release <CMD>` | Run `CMD` via `sh -c` when inhibition stops |
 | `--dry-run` | Run without connecting to Wayland (for testing hooks) |

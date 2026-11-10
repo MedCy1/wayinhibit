@@ -113,19 +113,21 @@ wait "$LINK_PID" 2>/dev/null || true
 rm -rf "$LINK_DIR"
 echo "ok: --toggle stops an instance started through a symlink"
 
-# Only one instance may own a pid file; the refused one must leave the owner untouched.
+# Only one instance owns a pid file; a second one still does its job, warns, and must leave
+# the owner's file alone.
 OWNED_PIDFILE=$(mktemp -u)
 "$bin" --quiet --pid-file "$OWNED_PIDFILE" &
 OWNER_PID=$!
 sleep 0.5
-"$bin" --quiet --pid-file "$OWNED_PIDFILE" 2>/dev/null && STATUS=0 || STATUS=$?
-[ $STATUS -eq 1 ] || { kill -TERM "$OWNER_PID"; echo "error: expected exit 1 for a second instance on the same pid file, got $STATUS"; exit 1; }
-alive "$OWNER_PID" || { echo "error: the refused instance disturbed the running one"; exit 1; }
+WARNING=$("$bin" --quiet --timeout 1s --pid-file "$OWNED_PIDFILE" 2>&1 >/dev/null) && STATUS=0 || STATUS=$?
+[ $STATUS -eq 0 ] || { kill -TERM "$OWNER_PID"; echo "error: expected exit 0 for a second instance on the same pid file, got $STATUS"; exit 1; }
+case "$WARNING" in *"already in use by PID $OWNER_PID"*) ;; *) kill -TERM "$OWNER_PID"; echo "error: expected a warning naming PID $OWNER_PID, got: $WARNING"; exit 1 ;; esac
+alive "$OWNER_PID" || { echo "error: the second instance disturbed the running one"; exit 1; }
 [ "$(cat "$OWNED_PIDFILE")" = "$OWNER_PID" ] || { echo "error: the pid file no longer names the running instance"; exit 1; }
 kill -TERM "$OWNER_PID"
 wait "$OWNER_PID" || true
 [ ! -f "$OWNED_PIDFILE" ] || { echo "error: pid file was not removed after exit"; exit 1; }
-echo "ok: a second instance on the same --pid-file is refused"
+echo "ok: a second instance on the same --pid-file runs, warns, and leaves the file to the owner"
 
 "$bin" --toggle 2>/dev/null && STATUS=0 || STATUS=$?
 [ $STATUS -eq 2 ] || { echo "error: expected exit 2 for --toggle without --pid-file, got $STATUS"; exit 1; }

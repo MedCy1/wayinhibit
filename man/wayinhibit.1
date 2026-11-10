@@ -61,10 +61,14 @@ Write the process ID to
 on startup and remove it on exit.
 The file is locked while
 .B wayinhibit
-runs, so only one instance can use a given path; a second one exits with
-status 1.
+runs, so it always names the instance that owns it.
+A second instance given the same path still does its job but prints a
+warning and leaves the file alone.
 The lock is released by the system when the process ends, even after a
 crash, so a leftover file never prevents a new start.
+On a filesystem that cannot lock files,
+.B wayinhibit
+warns and falls back to a best-effort check.
 Useful for signaling
 .B wayinhibit
 from scripts or service managers.
@@ -122,9 +126,7 @@ the timeout elapsed (foreground mode), or the child command exited
 with status 0 (command mode).
 .TP
 .B 1
-A runtime error occurred (e.g.\& failed to connect to the Wayland compositor,
-or another instance already uses the same
-.BR \-\-pid\-file ).
+A runtime error occurred (e.g.\& failed to connect to the Wayland compositor).
 .TP
 .B 2
 Invalid arguments were supplied.

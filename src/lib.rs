@@ -52,16 +52,38 @@ fn run(config: Config) -> Result<ExitCode, String> {
 
     // Take the pid file before anything else, so that "is an instance running?" and "become
     // the instance" are one atomic step, and an early failure below still cleans the file up.
+    // The pid file is bookkeeping: if someone else owns it, the job (inhibiting idle, running
+    // the command) still gets done, just without a pid file of our own. Only --toggle, whose
+    // whole point is the owner, acts on it.
     let _pid_file = match config.pid_file.as_deref() {
         None => None,
         Some(path) => match pidfile::acquire(path)? {
-            Acquired::Owner(pid_file) => Some(pid_file),
-            Acquired::Held(pid) if config.toggle => return stop_instance(pid),
-            Acquired::Held(pid) => {
+            Acquired::Owner(pid_file) => {
+                if let Some(reason) = pid_file.lock_problem() {
+                    warn(&format!(
+                        "cannot lock PID file '{}' ({reason}): a single instance is not \
+                         guaranteed and --toggle may misjudge. Use a path on a local \
+                         filesystem, e.g. under $XDG_RUNTIME_DIR, for reliable behavior.",
+                        path.display()
+                    ));
+                }
+                Some(pid_file)
+            }
+            Acquired::Held(Some(pid)) if config.toggle => return stop_instance(pid),
+            Acquired::Held(None) if config.toggle => {
                 return Err(format!(
-                    "another instance is already running (PID {pid}, PID file '{}')",
+                    "the instance owning PID file '{}' runs in another PID namespace and \
+                     cannot be stopped from here",
                     path.display()
                 ));
+            }
+            Acquired::Held(owner) => {
+                let owner = owner.map_or_else(|| "another instance".into(), |p| format!("PID {p}"));
+                warn(&format!(
+                    "PID file '{}' is already in use by {owner}; running without it",
+                    path.display()
+                ));
+                None
             }
         },
     };
@@ -107,6 +129,11 @@ fn run(config: Config) -> Result<ExitCode, String> {
     }
 
     Ok(exit_code)
+}
+
+/// Warnings go to stderr even with --quiet: they are about reliability, not progress.
+fn warn(message: &str) {
+    eprintln!("{BIN_NAME}: warning: {message}");
 }
 
 /// Asks the instance `pid` (the holder of the pid file lock) to stop.
