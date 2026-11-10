@@ -9,15 +9,15 @@ A small Wayland idle inhibitor written in Rust. Prevents your compositor from lo
 
 ## Features
 
-- **Foreground mode** — inhibits idle until `Ctrl-C` or `SIGTERM`
-- **Command mode** — wraps a command and releases inhibition when it exits
-- **Timeout** — stop automatically after a given duration (`30s`, `5m`, `2h`)
-- **Quiet mode** — suppress all output for use in scripts
-- **Exit code propagation** — in command mode, exits with the same code as the wrapped command
-- **PID file** — write the PID to a file for signaling from scripts or status bars
-- **Hooks** — run shell commands when inhibition starts and stops
-- **Dry-run** — test hooks and scripts without a live compositor
-- **Toggle** — start/stop from a single keybind or status bar click
+- Foreground mode: inhibits idle until `Ctrl-C` or `SIGTERM`
+- Command mode: wraps a command and releases the inhibition when it exits
+- Timeout: stops automatically after a given duration (`30s`, `5m`, `2h`)
+- Quiet mode: suppresses all output, for use in scripts
+- Exit code propagation: in command mode, exits with the same code as the wrapped command
+- PID file: writes the PID to a file so scripts or status bars can signal the process
+- Hooks: runs shell commands when inhibition starts and stops
+- Dry-run: tests hooks and scripts without a live compositor
+- Toggle: starts or stops from a single keybind or status bar click
 
 ## Installation
 
@@ -47,6 +47,8 @@ git clone https://github.com/MedCy1/wayinhibit
 cd wayinhibit
 cargo build --release
 ```
+
+Shell completions (bash, zsh, fish) are in `completions/` and the man page is `man/wayinhibit.1`. The AUR package installs both; with `cargo install` or a manual build you can copy them yourself.
 
 ## Usage
 
@@ -95,14 +97,9 @@ wayinhibit --quiet --pid-file /tmp/wayinhibit.pid &
 kill "$(cat /tmp/wayinhibit.pid)"
 ```
 
-The file is locked for as long as wayinhibit runs, so it always names the instance that owns it.
-A second instance started with the same path still does its job (inhibiting idle, running its
-command) but prints a warning and leaves the file alone. The lock is released by the system when
-wayinhibit stops, even if it crashes, so a leftover file never blocks the next start.
+While wayinhibit runs, the file is locked, so it always names the instance that owns it. A second instance started with the same path still does its job, but it prints a warning and leaves the file alone. The lock disappears when the process ends, even after a crash, so a leftover file never blocks the next start.
 
-Keep the PID file on a local filesystem (`/tmp`, `$XDG_RUNTIME_DIR`). On a filesystem that cannot
-lock files, wayinhibit warns and falls back to a best-effort check, which can misjudge when two
-instances start at the same moment.
+Keep the file on a local filesystem such as `/tmp` or `$XDG_RUNTIME_DIR`. Where locking is unavailable, wayinhibit warns and falls back to a best-effort check, which can misjudge when two instances start at the same moment.
 
 Run shell commands when inhibition starts and stops:
 
@@ -120,7 +117,7 @@ wayinhibit --dry-run --timeout 5s \
   --on-release "echo stop"
 ```
 
-Toggle inhibition from a single command (starts it if not running, stops it if running) — handy for a keybind or a status bar click handler:
+Toggle inhibition from a single command (it starts if nothing is running and stops the running instance otherwise), for example from a keybind or a status bar click handler:
 
 ```bash
 wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
@@ -140,9 +137,18 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 | `-h`, `--help` | Print help |
 | `-V`, `--version` | Print version |
 
+## Exit status
+
+| Code | Meaning |
+|---|---|
+| `0` | Stopped normally: `SIGINT` or `SIGTERM`, the timeout elapsed (foreground mode), or the wrapped command exited with 0 |
+| `1` | Runtime error, for example no Wayland compositor to connect to |
+| `2` | Invalid arguments |
+| *N* | Command mode: the wrapped command's exit code, or 128 + *n* if it was killed by signal *n* |
+
 ## Waybar integration
 
-**Option 1 — Waybar built-in module** (no wayinhibit required):
+**Option 1: Waybar's built-in module** (no wayinhibit required):
 
 ```json
 "idle_inhibitor": {
@@ -154,7 +160,7 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 }
 ```
 
-**Option 2 — Custom module using wayinhibit** (supports hooks, pid-file, timeout):
+**Option 2: custom module using wayinhibit** (supports hooks, pid-file, timeout):
 
 ```json
 "custom/idle-inhibitor": {
@@ -166,6 +172,8 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 ```
 
 Use option 2 if you want `--on-inhibit`/`--on-release` hooks, a timeout, or need to drive wayinhibit from other scripts as well.
+
+The module reads the PID file, which wayinhibit removes on a normal exit. After a crash or `kill -9` the file can outlive the process and the module keeps showing "inhibiting"; the next click starts a fresh instance and puts it right.
 
 ## Compatibility
 
@@ -206,4 +214,4 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more details.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
