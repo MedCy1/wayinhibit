@@ -9,6 +9,9 @@ set -eu
 bin="${1:-target/debug/wayinhibit}"
 [ -x "$bin" ] || { echo "error: binary not found or not executable: $bin" >&2; exit 2; }
 
+# True if the process exists and is not a zombie (kill -0 succeeds on zombies).
+alive() { [ -r "/proc/$1/stat" ] && [ "$(awk '{print $3}' "/proc/$1/stat")" != Z ]; }
+
 export XDG_RUNTIME_DIR=$(mktemp -d)
 export WLR_BACKENDS="${WLR_BACKENDS:-headless}"
 export WLR_RENDERER="${WLR_RENDERER:-pixman}"
@@ -73,6 +76,42 @@ sleep 0.5
 sleep 0.3
 [ ! -f "$TOGGLE_PIDFILE" ] || { echo "error: --toggle did not stop the running instance"; exit 1; }
 echo "ok: --toggle starts and stops an instance"
+
+# A stale pid file whose PID now belongs to an unrelated program must be left alone.
+STALE_PIDFILE=$(mktemp -u)
+sleep 30 &
+OTHER_PID=$!
+echo "$OTHER_PID" > "$STALE_PIDFILE"
+"$bin" --quiet --toggle --pid-file "$STALE_PIDFILE" &
+WINH_PID=$!
+sleep 0.5
+alive "$OTHER_PID" || { echo "error: --toggle killed an unrelated process"; exit 1; }
+[ "$(cat "$STALE_PIDFILE")" = "$WINH_PID" ] || { echo "error: --toggle did not start a new instance over a stale pid file"; exit 1; }
+kill -TERM $WINH_PID
+wait $WINH_PID || true
+kill "$OTHER_PID"
+wait "$OTHER_PID" 2>/dev/null || true
+echo "ok: --toggle ignores a stale pid file pointing at another program"
+
+# An instance started through a symlink must still be recognised and stopped.
+LINK_DIR=$(mktemp -d)
+ln -s "$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")" "$LINK_DIR/wi"
+LINK_PIDFILE=$(mktemp -u)
+"$LINK_DIR/wi" --quiet --pid-file "$LINK_PIDFILE" &
+LINK_PID=$!
+sleep 0.5
+[ -f "$LINK_PIDFILE" ] || { echo "error: symlinked instance did not start"; exit 1; }
+# --timeout: if the instance is not recognised, toggle starts a new one that must not hang the test.
+"$bin" --quiet --timeout 3s --toggle --pid-file "$LINK_PIDFILE"
+sleep 0.3
+if alive "$LINK_PID"; then
+  kill -TERM "$LINK_PID"
+  echo "error: --toggle did not stop a symlinked instance"
+  exit 1
+fi
+wait "$LINK_PID" 2>/dev/null || true
+rm -rf "$LINK_DIR"
+echo "ok: --toggle stops an instance started through a symlink"
 
 "$bin" --toggle 2>/dev/null && STATUS=0 || STATUS=$?
 [ $STATUS -eq 2 ] || { echo "error: expected exit 2 for --toggle without --pid-file, got $STATUS"; exit 1; }
