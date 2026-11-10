@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -81,25 +83,18 @@ fn inline_value<'a>(flag: &'a str, prefix: &str) -> Result<&'a str, String> {
     Ok(val)
 }
 
-pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
-    if args.is_empty() {
-        return Ok(ParseOutcome::Run(Config {
-            command: None,
-            quiet: false,
-            timeout: None,
-            pid_file: None,
-            on_inhibit: None,
-            on_release: None,
-            dry_run: false,
-            toggle: false,
-        }));
-    }
+/// Reads the value of an option that must be text (a duration, a hook command).
+fn text_value<'a>(value: &'a OsStr, option: &str) -> Result<&'a str, String> {
+    value
+        .to_str()
+        .ok_or_else(|| format!("the value of {option} is not valid UTF-8"))
+}
 
-    match args {
-        [flag] if flag == "-h" || flag == "--help" => return Ok(ParseOutcome::PrintHelp),
-        [flag] if flag == "-V" || flag == "--version" => return Ok(ParseOutcome::PrintVersion),
-        _ => {}
-    }
+/// Parses the command line. The wrapped command and the pid file path may contain bytes that
+/// are not valid UTF-8 (file names on Linux can), so arguments are kept as `OsStr`; only the
+/// option names and their text values have to be valid UTF-8.
+pub fn parse_args<S: AsRef<OsStr>>(args: &[S]) -> Result<ParseOutcome, String> {
+    let args: Vec<&OsStr> = args.iter().map(AsRef::as_ref).collect();
 
     let mut quiet = false;
     let mut timeout = None;
@@ -110,15 +105,32 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
     let mut toggle = false;
     let mut i = 0;
 
+    // The value following an option, if any.
+    let value = |i: usize, option: &str| -> Result<&OsStr, String> {
+        args.get(i)
+            .copied()
+            .ok_or_else(|| format!("{option} requires a value"))
+    };
+
     while i < args.len() {
-        match args[i].as_str() {
+        let Some(flag) = args[i].to_str() else {
+            return Err(format!(
+                "unsupported argument: {}",
+                args[i].to_string_lossy()
+            ));
+        };
+
+        match flag {
+            // Help and version win wherever they appear before `--`, like in other tools.
+            "-h" | "--help" => return Ok(ParseOutcome::PrintHelp),
+            "-V" | "--version" => return Ok(ParseOutcome::PrintVersion),
             "-q" | "--quiet" => quiet = true,
             "-t" | "--timeout" => {
                 i += 1;
-                let val = args
-                    .get(i)
-                    .ok_or_else(|| "--timeout requires a value".to_string())?;
-                timeout = Some(parse_duration(val)?);
+                timeout = Some(parse_duration(text_value(
+                    value(i, "--timeout")?,
+                    "--timeout",
+                )?)?);
             }
             flag if flag.starts_with("--timeout=") => {
                 let val = inline_value(flag, "--timeout=")?;
@@ -126,31 +138,27 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             }
             "-p" | "--pid-file" => {
                 i += 1;
-                let val = args
-                    .get(i)
-                    .ok_or_else(|| "--pid-file requires a value".to_string())?;
-                pid_file = Some(PathBuf::from(val));
+                pid_file = Some(PathBuf::from(value(i, "--pid-file")?));
             }
             flag if flag.starts_with("--pid-file=") => {
-                let val = inline_value(flag, "--pid-file=")?;
-                pid_file = Some(PathBuf::from(val));
+                // Cut the raw bytes, not the text: the path itself may not be valid UTF-8.
+                inline_value(flag, "--pid-file=")?;
+                pid_file = Some(PathBuf::from(OsStr::from_bytes(
+                    &args[i].as_bytes()["--pid-file=".len()..],
+                )));
             }
             "--on-inhibit" => {
                 i += 1;
-                let val = args
-                    .get(i)
-                    .ok_or_else(|| "--on-inhibit requires a value".to_string())?;
-                on_inhibit = Some(val.clone());
+                on_inhibit =
+                    Some(text_value(value(i, "--on-inhibit")?, "--on-inhibit")?.to_owned());
             }
             flag if flag.starts_with("--on-inhibit=") => {
                 on_inhibit = Some(inline_value(flag, "--on-inhibit=")?.to_string());
             }
             "--on-release" => {
                 i += 1;
-                let val = args
-                    .get(i)
-                    .ok_or_else(|| "--on-release requires a value".to_string())?;
-                on_release = Some(val.clone());
+                on_release =
+                    Some(text_value(value(i, "--on-release")?, "--on-release")?.to_owned());
             }
             flag if flag.starts_with("--on-release=") => {
                 on_release = Some(inline_value(flag, "--on-release=")?.to_string());
@@ -158,12 +166,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             "--dry-run" => dry_run = true,
             "--toggle" => toggle = true,
             "--" => break,
-            other => {
-                return Err(format!(
-                    "unsupported argument: {other}. Run '{} --help' for usage.",
-                    env!("CARGO_PKG_NAME")
-                ));
-            }
+            other => return Err(format!("unsupported argument: {other}")),
         }
         i += 1;
     }
@@ -178,8 +181,11 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
             return Err("expected a command after '--'".to_string());
         }
         Some(CommandSpec {
-            program: command_args[0].clone(),
-            args: command_args[1..].to_vec(),
+            program: command_args[0].to_owned(),
+            args: command_args[1..]
+                .iter()
+                .map(|arg| (*arg).to_owned())
+                .collect(),
         })
     } else {
         None
@@ -209,7 +215,7 @@ mod tests {
     #[test]
     fn parses_foreground_mode() {
         assert_eq!(
-            parse_args(&[]),
+            parse_args::<&str>(&[]),
             Ok(ParseOutcome::Run(Config {
                 command: None,
                 quiet: false,
@@ -243,8 +249,8 @@ mod tests {
             parse_args(&args),
             Ok(ParseOutcome::Run(Config {
                 command: Some(CommandSpec {
-                    program: "sleep".to_string(),
-                    args: vec!["1".to_string()],
+                    program: "sleep".into(),
+                    args: vec!["1".into()],
                 }),
                 quiet: false,
                 timeout: None,
@@ -320,8 +326,8 @@ mod tests {
             parse_args(&args),
             Ok(ParseOutcome::Run(Config {
                 command: Some(CommandSpec {
-                    program: "sleep".to_string(),
-                    args: vec!["1".to_string()],
+                    program: "sleep".into(),
+                    args: vec!["1".into()],
                 }),
                 quiet: true,
                 timeout: None,
@@ -400,7 +406,7 @@ mod tests {
             parse_args(&args),
             Ok(ParseOutcome::Run(Config {
                 command: Some(CommandSpec {
-                    program: "rsync".to_string(),
+                    program: "rsync".into(),
                     args: vec![],
                 }),
                 quiet: false,

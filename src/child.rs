@@ -1,42 +1,129 @@
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::ffi::OsString;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
+use std::process::{Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use std::os::unix::process::{CommandExt, ExitStatusExt};
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandSpec {
-    pub program: String,
-    pub args: Vec<String>,
+    pub program: OsString,
+    pub args: Vec<OsString>,
 }
 
 impl CommandSpec {
     pub fn spawn(&self) -> Result<ManagedChild, String> {
-        let child = Command::new(&self.program)
+        // The terminal is handed to the command only when wayinhibit owns it right now, i.e.
+        // when it was started in the foreground of a terminal. Otherwise (script, service,
+        // background job) there is nothing to hand over.
+        let terminal_owner = foreground_group();
+
+        let mut command = Command::new(&self.program);
+        command
             .args(&self.args)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             // Run in its own process group so terminate_and_wait can signal the whole
             // group (e.g. a shell script's own background children), not just this PID.
-            .process_group(0)
-            .spawn()
-            .map_err(|err| format!("failed to start '{}': {err}", self.program))?;
+            .process_group(0);
+        if terminal_owner.is_some() {
+            // SAFETY: the closure only calls async-signal-safe functions (setpgid, getpid,
+            // sigprocmask, tcsetpgrp) and does not allocate.
+            unsafe {
+                command.pre_exec(|| {
+                    // Done here, before the command starts, so it can read the terminal from
+                    // its very first instruction: a process in a background group is stopped
+                    // by SIGTTIN as soon as it reads. Errors are ignored on purpose: without
+                    // the terminal the command still runs, as it did before.
+                    libc::setpgid(0, 0);
+                    set_foreground(libc::getpid());
+                    Ok(())
+                });
+            }
+        }
 
-        Ok(ManagedChild { child })
+        let child = command.spawn().map_err(|err| {
+            format!(
+                "failed to start '{}': {err}",
+                self.program.to_string_lossy()
+            )
+        })?;
+
+        Ok(ManagedChild {
+            pid: child.id(),
+            terminal_owner,
+            exited: None,
+        })
     }
 }
 
+/// What a child is doing right now.
+pub enum ChildState {
+    Running,
+    /// Stopped by a job-control signal (Ctrl-Z).
+    Stopped,
+    Exited(u8),
+}
+
 pub struct ManagedChild {
-    child: Child,
+    pid: u32,
+    /// Our own process group when we handed the terminal to the child; the terminal goes back
+    /// to it when the child ends or stops.
+    terminal_owner: Option<libc::pid_t>,
+    exited: Option<u8>,
 }
 
 impl ManagedChild {
+    fn pgid(&self) -> libc::pid_t {
+        // A `process_group(0)` child's PID doubles as its own process group.
+        self.pid as libc::pid_t
+    }
+
+    /// Looks at the child without waiting. Stops are reported too, because a command that
+    /// owns the terminal can be suspended with Ctrl-Z without wayinhibit hearing about it.
+    pub fn poll(&mut self) -> Result<ChildState, String> {
+        if let Some(code) = self.exited {
+            return Ok(ChildState::Exited(code));
+        }
+
+        let mut raw_status: libc::c_int = 0;
+        loop {
+            // SAFETY: `raw_status` outlives the call.
+            let result = unsafe {
+                libc::waitpid(
+                    self.pid as libc::pid_t,
+                    &mut raw_status,
+                    libc::WNOHANG | libc::WUNTRACED,
+                )
+            };
+            if result == -1 {
+                let err = std::io::Error::last_os_error();
+                if err.raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                return Err(format!("failed to wait for child process: {err}"));
+            }
+            if result == 0 {
+                return Ok(ChildState::Running);
+            }
+            break;
+        }
+
+        if libc::WIFSTOPPED(raw_status) {
+            return Ok(ChildState::Stopped);
+        }
+
+        let code = exit_code_from_status(ExitStatus::from_raw(raw_status));
+        self.exited = Some(code);
+        self.give_back_terminal();
+        Ok(ChildState::Exited(code))
+    }
+
     pub fn try_wait(&mut self) -> Result<Option<u8>, String> {
-        self.child
-            .try_wait()
-            .map_err(|err| format!("failed to wait for child process: {err}"))
-            .map(|status| status.map(exit_code_from_status))
+        match self.poll()? {
+            ChildState::Exited(code) => Ok(Some(code)),
+            ChildState::Running | ChildState::Stopped => Ok(None),
+        }
     }
 
     pub fn terminate_and_wait(&mut self, grace_period: Duration) -> Result<u8, String> {
@@ -44,7 +131,9 @@ impl ManagedChild {
             return Ok(code);
         }
 
-        send_signal_to_group(self.child.id(), libc::SIGTERM)?;
+        send_signal_to_group(self.pid, libc::SIGTERM)?;
+        // A suspended command only sees SIGTERM once it is running again.
+        let _ = send_signal_to_group(self.pid, libc::SIGCONT);
 
         let deadline = Instant::now() + grace_period;
         loop {
@@ -59,12 +148,51 @@ impl ManagedChild {
             thread::sleep(Duration::from_millis(50));
         }
 
-        send_signal_to_group(self.child.id(), libc::SIGKILL)?;
+        send_signal_to_group(self.pid, libc::SIGKILL)?;
 
-        self.child
-            .wait()
-            .map(exit_code_from_status)
-            .map_err(|err| format!("failed to wait for child process after SIGKILL: {err}"))
+        loop {
+            // A killed process cannot stay stopped, so this ends with the exit.
+            match self.poll() {
+                Ok(ChildState::Exited(code)) => return Ok(code),
+                Ok(_) => thread::sleep(Duration::from_millis(10)),
+                Err(err) => return Err(format!("{err} after SIGKILL")),
+            }
+        }
+    }
+
+    /// The command was suspended (Ctrl-Z) while it owned the terminal. Do what a shell expects
+    /// of a job: give the terminal back, suspend too, and when resumed wake the command up and
+    /// take the terminal again if we are back in the foreground.
+    pub fn relay_stop(&mut self) {
+        let Some(own_group) = self.terminal_owner else {
+            return;
+        };
+
+        set_foreground(own_group);
+        // SAFETY: plain signal to ourselves; returns once something sends SIGCONT.
+        unsafe { libc::kill(libc::getpid(), libc::SIGSTOP) };
+
+        let _ = send_signal_to_group(self.pid, libc::SIGCONT);
+        // Resumed with `fg` the terminal is ours again and goes to the command; resumed with
+        // `bg` it belongs to the shell or another job, and must stay there.
+        if current_foreground_group() == Some(own_group) {
+            set_foreground(self.pgid());
+        }
+    }
+
+    /// Returns the terminal to wayinhibit once the command no longer needs it.
+    fn give_back_terminal(&self) {
+        if let Some(own_group) = self.terminal_owner {
+            if current_foreground_group() == Some(self.pgid()) {
+                set_foreground(own_group);
+            }
+        }
+    }
+}
+
+impl Drop for ManagedChild {
+    fn drop(&mut self) {
+        self.give_back_terminal();
     }
 }
 
@@ -101,10 +229,45 @@ pub(crate) fn send_signal(pid: u32, signal: libc::c_int) -> std::io::Result<()> 
 
 /// Sends `signal` to every process in the group led by `pgid` (a `process_group(0)`
 /// child's PID doubles as its own pgid). A negative PID targets the whole group.
-fn send_signal_to_group(pgid: u32, signal: libc::c_int) -> Result<(), String> {
+pub(crate) fn send_signal_to_group(pgid: u32, signal: libc::c_int) -> Result<(), String> {
     let pgid = i32::try_from(pgid).map_err(|_| "process id is out of range".to_string())?;
     kill(-pgid, signal)
         .map_err(|err| format!("failed to send signal {signal} to process group {pgid}: {err}"))
+}
+
+/// Runs `action` with SIGTTOU blocked. A process outside the foreground group that changes the
+/// terminal's foreground group, or writes to a terminal with TOSTOP set, is stopped by SIGTTOU
+/// unless it blocks or ignores it, in which case the operation simply goes through.
+pub(crate) fn with_sigttou_blocked<T>(action: impl FnOnce() -> T) -> T {
+    // SAFETY: `sigset_t` is a plain C type initialised by `sigemptyset` before use.
+    unsafe {
+        let mut blocked: libc::sigset_t = std::mem::zeroed();
+        let mut previous: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut blocked);
+        libc::sigaddset(&mut blocked, libc::SIGTTOU);
+        libc::sigprocmask(libc::SIG_BLOCK, &blocked, &mut previous);
+        let result = action();
+        libc::sigprocmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut());
+        result
+    }
+}
+
+fn current_foreground_group() -> Option<libc::pid_t> {
+    // SAFETY: plain system call; fails (-1) when stdin is not our controlling terminal.
+    let group = unsafe { libc::tcgetpgrp(0) };
+    (group > 0).then_some(group)
+}
+
+/// Our own process group, if stdin is our terminal and we are in its foreground.
+fn foreground_group() -> Option<libc::pid_t> {
+    // SAFETY: plain system call.
+    let own = unsafe { libc::getpgrp() };
+    (current_foreground_group() == Some(own)).then_some(own)
+}
+
+fn set_foreground(group: libc::pid_t) -> bool {
+    // SAFETY: plain system call on stdin.
+    with_sigttou_blocked(|| unsafe { libc::tcsetpgrp(0, group) } == 0)
 }
 
 #[cfg(test)]
