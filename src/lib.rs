@@ -64,17 +64,25 @@ fn print_help() {
 }
 
 /// True if `pid` is a wayinhibit process. A PID file can outlive its process, and the PID may
-/// then belong to something unrelated: never signal it. The kernel keeps only the first 15
-/// bytes of the program name in `comm`, so names are truncated the same way before comparing.
+/// then belong to something unrelated: never signal it.
 fn is_wayinhibit(pid: u32) -> bool {
+    let own_path = std::env::current_exe().ok();
+    // Resolved executable path: the same program even when started through a symlink.
+    // Unreadable for other users' processes, and suffixed " (deleted)" after an upgrade,
+    // so a mismatch here is not conclusive.
+    if let (Ok(exe), Some(own)) = (std::fs::read_link(format!("/proc/{pid}/exe")), &own_path) {
+        if exe == *own {
+            return true;
+        }
+    }
+    // Fallback on the process name. The kernel keeps only the first 15 bytes of it in
+    // `comm`, so names are truncated the same way before comparing.
     let Ok(comm) = std::fs::read_to_string(format!("/proc/{pid}/comm")) else {
         return false;
     };
     let comm = comm.trim_end();
-    let own_exe = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
-    [Some(BIN_NAME.to_owned()), own_exe]
+    let own_name = own_path.and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
+    [Some(BIN_NAME.to_owned()), own_name]
         .into_iter()
         .flatten()
         .any(|name| comm.as_bytes() == &name.as_bytes()[..name.len().min(15)])
@@ -269,6 +277,40 @@ mod tests {
             running_pid_of(&format!("{}\n", sleeper.0.id()), "other"),
             None
         );
+    }
+
+    /// Not a real test: the process that `symlinked_instance_is_recognised` runs through a symlink.
+    #[test]
+    #[ignore]
+    fn sleep_helper() {
+        std::thread::sleep(Duration::from_secs(30));
+    }
+
+    #[test]
+    fn symlinked_instance_is_recognised() {
+        let link = tmp("link-to-self");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(std::env::current_exe().unwrap(), &link).unwrap();
+        let child = Command::new(&link)
+            .args(["--ignored", "--exact", "tests::sleep_helper"])
+            .spawn()
+            .unwrap();
+        let sleeper = Sleeper(child);
+        let comm = format!("/proc/{}/comm", sleeper.0.id());
+        let name = link.file_name().unwrap().to_string_lossy().into_owned();
+        // Wait for exec: comm is the symlink name (truncated to 15 bytes), unlike the real binary's.
+        while std::fs::read_to_string(&comm)
+            .unwrap_or_default()
+            .trim_end()
+            != &name[..name.len().min(15)]
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            running_pid_of(&format!("{}\n", sleeper.0.id()), "symlink"),
+            Some(sleeper.0.id())
+        );
+        let _ = std::fs::remove_file(&link);
     }
 
     #[test]
