@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.2.0] - 2026-11-10
+
+### Bug Fixes
+
+- Lock the pid file so only one instance runs and --toggle cannot race
+- Reject out-of-range --timeout values instead of panicking
+
+### Testing
+
+- E2e coverage for --toggle with a stale pid file and a symlinked instance
 ## [1.1.1] - 2026-11-10
 
 ### Bug Fixes
