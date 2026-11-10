@@ -1,6 +1,30 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.1.0] - 2026-11-10
+
+### Bug Fixes
+
+- Version the local binary name in PKGBUILD to prevent yay cache collisions
+- Update wayland-scanner to pull quick-xml 0.41.0 (RUSTSEC advisory) (#10)
+- Don't orphan the wrapped child when the Wayland connection breaks
+- Handle SIGHUP for graceful shutdown
+- Terminate the wrapped command's whole process group, not just its PID
+- Don't let set -eu abort e2e-test.sh on wayinhibit's own exit code
+- Don't signal an unrelated process when --toggle finds a stale pid file
+
+### CI & Automation
+
+- Extract inline e2e shell test into scripts/e2e-test.sh
+
+### Features
+
+- Add --toggle flag to start/stop from a single command
+
+### Testing
+
+- Add e2e coverage for SIGHUP and Wayland connection loss
+- Cover child exit codes, group termination and SIGKILL escalation
 ## [1.0.0] - 2026-06-29
 
 ### Documentation
