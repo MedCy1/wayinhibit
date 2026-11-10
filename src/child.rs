@@ -80,18 +80,22 @@ fn exit_code_from_status(status: ExitStatus) -> u8 {
     1
 }
 
-fn kill(target: i32, signal: libc::c_int) -> Result<(), String> {
+fn kill(target: i32, signal: libc::c_int) -> std::io::Result<()> {
     if unsafe { libc::kill(target, signal) } == -1 {
-        return Err(format!(
-            "failed to send signal {signal} to {target}: {}",
-            std::io::Error::last_os_error()
-        ));
+        return Err(std::io::Error::last_os_error());
     }
     Ok(())
 }
 
-pub(crate) fn send_signal(pid: u32, signal: libc::c_int) -> Result<(), String> {
-    let pid = i32::try_from(pid).map_err(|_| "process id is out of range".to_string())?;
+/// Sends `signal` to a single process. The raw error is returned so callers can tell
+/// "no such process" (`ESRCH`) from a real failure.
+pub(crate) fn send_signal(pid: u32, signal: libc::c_int) -> std::io::Result<()> {
+    let pid = i32::try_from(pid).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "process id is out of range",
+        )
+    })?;
     kill(pid, signal)
 }
 
@@ -100,6 +104,7 @@ pub(crate) fn send_signal(pid: u32, signal: libc::c_int) -> Result<(), String> {
 fn send_signal_to_group(pgid: u32, signal: libc::c_int) -> Result<(), String> {
     let pgid = i32::try_from(pgid).map_err(|_| "process id is out of range".to_string())?;
     kill(-pgid, signal)
+        .map_err(|err| format!("failed to send signal {signal} to process group {pgid}: {err}"))
 }
 
 #[cfg(test)]

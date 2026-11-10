@@ -113,6 +113,20 @@ wait "$LINK_PID" 2>/dev/null || true
 rm -rf "$LINK_DIR"
 echo "ok: --toggle stops an instance started through a symlink"
 
+# Only one instance may own a pid file; the refused one must leave the owner untouched.
+OWNED_PIDFILE=$(mktemp -u)
+"$bin" --quiet --pid-file "$OWNED_PIDFILE" &
+OWNER_PID=$!
+sleep 0.5
+"$bin" --quiet --pid-file "$OWNED_PIDFILE" 2>/dev/null && STATUS=0 || STATUS=$?
+[ $STATUS -eq 1 ] || { kill -TERM "$OWNER_PID"; echo "error: expected exit 1 for a second instance on the same pid file, got $STATUS"; exit 1; }
+alive "$OWNER_PID" || { echo "error: the refused instance disturbed the running one"; exit 1; }
+[ "$(cat "$OWNED_PIDFILE")" = "$OWNER_PID" ] || { echo "error: the pid file no longer names the running instance"; exit 1; }
+kill -TERM "$OWNER_PID"
+wait "$OWNER_PID" || true
+[ ! -f "$OWNED_PIDFILE" ] || { echo "error: pid file was not removed after exit"; exit 1; }
+echo "ok: a second instance on the same --pid-file is refused"
+
 "$bin" --toggle 2>/dev/null && STATUS=0 || STATUS=$?
 [ $STATUS -eq 2 ] || { echo "error: expected exit 2 for --toggle without --pid-file, got $STATUS"; exit 1; }
 echo "ok: --toggle without --pid-file is rejected"
