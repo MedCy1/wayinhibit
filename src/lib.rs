@@ -63,12 +63,29 @@ fn print_help() {
     print!("{}", cli::help_text(VERSION));
 }
 
-/// Reads a PID file and returns the PID if the process it names is still alive.
+/// True if `pid` is a wayinhibit process. A PID file can outlive its process, and the PID may
+/// then belong to something unrelated: never signal it. The kernel keeps only the first 15
+/// bytes of the program name in `comm`, so names are truncated the same way before comparing.
+fn is_wayinhibit(pid: u32) -> bool {
+    let Ok(comm) = std::fs::read_to_string(format!("/proc/{pid}/comm")) else {
+        return false;
+    };
+    let comm = comm.trim_end();
+    let own_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
+    [Some(BIN_NAME.to_owned()), own_exe]
+        .into_iter()
+        .flatten()
+        .any(|name| comm.as_bytes() == &name.as_bytes()[..name.len().min(15)])
+}
+
+/// Reads a PID file and returns the PID if it names a live wayinhibit process.
 fn running_pid(path: &Path) -> Option<u32> {
     let pid: u32 = std::fs::read_to_string(path).ok()?.trim().parse().ok()?;
     let signed_pid = i32::try_from(pid).ok()?;
     // Signal 0 sends nothing; it only checks whether the process exists.
-    (unsafe { libc::kill(signed_pid, 0) } == 0).then_some(pid)
+    (unsafe { libc::kill(signed_pid, 0) } == 0 && is_wayinhibit(pid)).then_some(pid)
 }
 
 fn run(config: Config) -> Result<ExitCode, String> {
@@ -204,5 +221,93 @@ fn run_with_child(
         }
 
         tick(inhibitor)?;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::{Child, Command};
+
+    fn tmp(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("wayinhibit-test-{}-{name}", std::process::id()))
+    }
+
+    fn running_pid_of(content: &str, name: &str) -> Option<u32> {
+        let path = tmp(name);
+        std::fs::write(&path, content).unwrap();
+        let result = running_pid(&path);
+        let _ = std::fs::remove_file(&path);
+        result
+    }
+
+    struct Sleeper(Child);
+
+    impl Sleeper {
+        fn start() -> Self {
+            Self(Command::new("sleep").arg("30").spawn().unwrap())
+        }
+    }
+
+    impl Drop for Sleeper {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    #[test]
+    fn own_process_is_recognised() {
+        let pid = std::process::id();
+        assert_eq!(running_pid_of(&format!("{pid}\n"), "own"), Some(pid));
+    }
+
+    #[test]
+    fn unrelated_live_process_is_rejected() {
+        let sleeper = Sleeper::start();
+        assert_eq!(
+            running_pid_of(&format!("{}\n", sleeper.0.id()), "other"),
+            None
+        );
+    }
+
+    #[test]
+    fn dead_process_is_rejected() {
+        let mut child = Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        assert_eq!(running_pid_of(&pid.to_string(), "dead"), None);
+    }
+
+    #[test]
+    fn invalid_pid_file_content_is_rejected() {
+        for (i, content) in ["", "abc", "-1", "99999999999999", "1 2"]
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                running_pid_of(content, &format!("bad{i}")),
+                None,
+                "{content:?}"
+            );
+        }
+        assert_eq!(running_pid(&tmp("missing")), None);
+    }
+
+    #[test]
+    fn pid_file_is_written_and_removed_on_drop() {
+        let path = tmp("pidfile");
+        let guard = PidFile::create(&path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            format!("{}\n", std::process::id())
+        );
+        drop(guard);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn pid_file_in_missing_directory_is_an_error() {
+        assert!(PidFile::create(&tmp("nodir").join("x.pid")).is_err());
     }
 }
