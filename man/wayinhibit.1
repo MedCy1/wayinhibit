@@ -22,14 +22,24 @@ prevents the Wayland compositor from activating the idle state
 Without a command,
 .B wayinhibit
 runs in the foreground and inhibits idle until it receives
-.B SIGINT
+.BR SIGINT ,
+.B SIGTERM
 or
-.BR SIGTERM .
+.BR SIGHUP .
+A hangup that was ignored when
+.B wayinhibit
+started (as
+.BR nohup (1)
+does) stays ignored.
 .PP
 With a command,
 .B wayinhibit
 runs that command as a child process, inhibits idle for its duration,
 and exits with the same exit code.
+When started from a terminal,
+.B wayinhibit
+gives the terminal to the command, so that interactive programs work and
+Ctrl\-C and Ctrl\-Z act on the command directly.
 .PP
 Requires a compositor that supports the
 .B zwp_idle_inhibit_manager_v1
@@ -40,6 +50,12 @@ Wayland protocol.
 .BR \-t ", " \-\-timeout " " \fIDURATION\fR
 Stop after
 .IR DURATION .
+In command mode the command is stopped too:
+.B SIGTERM
+to its whole process group, then
+.B SIGKILL
+after 2 seconds, and the exit status is 143 unless the command ended
+differently.
 Accepted suffixes:
 .B s
 (seconds),
@@ -53,7 +69,8 @@ Examples:
 .BR 2h .
 .TP
 .BR \-q ", " \-\-quiet
-Suppress all informational output.
+Suppress informational output.
+Warnings and errors are still written to standard error.
 .TP
 .BR \-p ", " \-\-pid\-file " " \fIPATH\fR
 Write the process ID to
@@ -78,7 +95,8 @@ Run
 .I CMD
 via
 .B sh -c
-immediately after idle inhibition starts.
+when idle inhibition starts.
+It runs in its own process group, and a request to stop ends it.
 Errors from
 .I CMD
 are silently ignored.
@@ -88,7 +106,13 @@ Run
 .I CMD
 via
 .B sh -c
-immediately before idle inhibition stops.
+once idle inhibition has stopped.
+It always follows
+.BR \-\-on\-inhibit ,
+also when the command could not be started.
+It is not cut short by the request that made
+.B wayinhibit
+stop, only by a second one.
 Errors from
 .I CMD
 are silently ignored.
@@ -119,14 +143,16 @@ Print the version number and exit.
 .TP
 .B 0
 Stopped normally: received
-.B SIGINT
+.BR SIGINT ,
+.B SIGTERM
 or
-.BR SIGTERM ,
+.BR SIGHUP ,
 the timeout elapsed (foreground mode), or the child command exited
 with status 0 (command mode).
 .TP
 .B 1
-A runtime error occurred (e.g.\& failed to connect to the Wayland compositor).
+A runtime error occurred (e.g.\& failed to connect to the Wayland compositor,
+or the connection to it was lost in foreground mode).
 .TP
 .B 2
 Invalid arguments were supplied.
@@ -138,6 +164,13 @@ is propagated as\-is.
 If
 .I COMMAND
 was terminated by a signal, the exit code is 128 + signal number.
+A command stopped by
+.B \-\-timeout
+or by a signal sent to
+.B wayinhibit
+usually ends with 143 (128 + 15).
+Ctrl\-C on a terminal interrupts the command itself, usually giving 130
+(128 + 2).
 .
 .SH EXAMPLES
 Inhibit idle until Ctrl\-C:

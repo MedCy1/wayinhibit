@@ -17,15 +17,22 @@ Usage:
   wayinhibit [OPTIONS] -- <COMMAND> [ARG...]
 
 Options:
-  -t, --timeout <DURATION>      Stop after a given duration (e.g. 30s, 5m, 2h)
-  -q, --quiet                   Suppress all output
-  -p, --pid-file <PATH>         Write PID to PATH on startup, remove it on exit
-      --on-inhibit <CMD>        Run CMD (via sh -c) when inhibition starts
-      --on-release <CMD>        Run CMD (via sh -c) when inhibition stops
-      --dry-run                 Run without connecting to Wayland (for testing hooks)
-      --toggle                 Stop the running instance from --pid-file, or start one
-  -h, --help                    Print help
-  -V, --version                 Print version
+  -t, --timeout <DURATION>  Stop after a given duration (e.g. 30s, 5m, 2h)
+  -q, --quiet               Suppress informational output (warnings and errors remain)
+  -p, --pid-file <PATH>     Write PID to PATH on startup and lock it, remove it on exit
+      --on-inhibit <CMD>    Run CMD (via sh -c) when inhibition starts
+      --on-release <CMD>    Run CMD (via sh -c) when inhibition stops
+      --dry-run             Run without connecting to Wayland (for testing hooks)
+      --toggle              Stop the running instance from --pid-file, or start one
+  -h, --help                Print help
+  -V, --version             Print version
+
+Exit status:
+  0  stopped normally (a signal, or the timeout in foreground mode)
+  1  runtime error, for example no Wayland compositor
+  2  invalid arguments
+  N  command mode: the command's own status. That is 143 when --timeout or a signal
+     sent to wayinhibit stopped it, and 130 when Ctrl-C interrupted it on a terminal
 "
     )
 }

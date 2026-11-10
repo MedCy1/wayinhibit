@@ -9,10 +9,10 @@ A small Wayland idle inhibitor written in Rust. Prevents your compositor from lo
 
 ## Features
 
-- Foreground mode: inhibits idle until `Ctrl-C` or `SIGTERM`
+- Foreground mode: inhibits idle until `Ctrl-C`, `SIGTERM` or `SIGHUP`
 - Command mode: wraps a command and releases the inhibition when it exits
 - Timeout: stops automatically after a given duration (`30s`, `5m`, `2h`)
-- Quiet mode: suppresses all output, for use in scripts
+- Quiet mode: suppresses informational output, for use in scripts (warnings and errors still go to stderr)
 - Exit code propagation: in command mode, exits with the same code as the wrapped command
 - PID file: writes the PID to a file so scripts or status bars can signal the process
 - Hooks: runs shell commands when inhibition starts and stops
@@ -73,6 +73,8 @@ wayinhibit --timeout 2h
 wayinhibit --timeout 30m -- ./backup.sh
 ```
 
+In command mode the timeout stops the command as well: `SIGTERM` goes to its whole process group, then `SIGKILL` after 2 seconds. The exit status is then 143 (or 137 if the command had to be killed).
+
 Use in a script without any output:
 
 ```bash
@@ -109,6 +111,8 @@ wayinhibit \
   --on-release  "notify-send wayinhibit 'Idle released'"
 ```
 
+A hook runs in its own process group and its exit status is ignored. `--on-release` always follows `--on-inhibit`, also when the command cannot be started. A request to stop ends a slow `--on-inhibit` hook; `--on-release` is not cut short by the request that made wayinhibit stop, only by a second one.
+
 Test your hooks without a live compositor:
 
 ```bash
@@ -127,11 +131,11 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 
 | Flag | Description |
 |---|---|
-| `-t`, `--timeout <DURATION>` | Stop after a given duration (`30s`, `5m`, `2h`) |
-| `-q`, `--quiet` | Suppress all output |
-| `-p`, `--pid-file <PATH>` | Write PID to `PATH` on startup, remove it on exit. The file is locked while wayinhibit runs, so it names its owner |
-| `--on-inhibit <CMD>` | Run `CMD` via `sh -c` when inhibition starts |
-| `--on-release <CMD>` | Run `CMD` via `sh -c` when inhibition stops |
+| `-t`, `--timeout <DURATION>` | Stop after a given duration (e.g. `30s`, `5m`, `2h`). In command mode the command is stopped too |
+| `-q`, `--quiet` | Suppress informational output (warnings and errors remain) |
+| `-p`, `--pid-file <PATH>` | Write PID to `PATH` on startup and lock it, remove it on exit. The lock means the file always names its owner |
+| `--on-inhibit <CMD>` | Run `CMD` (via `sh -c`) when inhibition starts |
+| `--on-release <CMD>` | Run `CMD` (via `sh -c`) when inhibition stops |
 | `--dry-run` | Run without connecting to Wayland (for testing hooks) |
 | `--toggle` | Stop the running instance from `--pid-file`, or start one |
 | `-h`, `--help` | Print help |
@@ -141,10 +145,12 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 
 | Code | Meaning |
 |---|---|
-| `0` | Stopped normally: `SIGINT` or `SIGTERM`, the timeout elapsed (foreground mode), or the wrapped command exited with 0 |
-| `1` | Runtime error, for example no Wayland compositor to connect to |
+| `0` | Stopped normally: `SIGINT`, `SIGTERM` or `SIGHUP`, the timeout elapsed (foreground mode), or the wrapped command exited with 0 |
+| `1` | Runtime error, for example no Wayland compositor to connect to, or the connection lost in foreground mode |
 | `2` | Invalid arguments |
 | *N* | Command mode: the wrapped command's exit code, or 128 + *n* if it was killed by signal *n* |
+
+In command mode, `--timeout` or a signal sent to wayinhibit stops the command with `SIGTERM`, which usually gives 143. When wayinhibit runs on a terminal it hands the terminal to the command, so that interactive programs work: `Ctrl-C` then interrupts the command itself (usually 130) and `Ctrl-Z` suspends the whole job. A hangup that was ignored when wayinhibit started (as `nohup` does) stays ignored.
 
 ## Waybar integration
 
@@ -174,6 +180,40 @@ wayinhibit --quiet --toggle --pid-file /tmp/wayinhibit.pid
 Use option 2 if you want `--on-inhibit`/`--on-release` hooks, a timeout, or need to drive wayinhibit from other scripts as well.
 
 The module reads the PID file, which wayinhibit removes on a normal exit. After a crash or `kill -9` the file can outlive the process and the module keeps showing "inhibiting"; the next click starts a fresh instance and puts it right.
+
+## Keybinds and services
+
+Sway:
+
+```
+bindsym $mod+i exec wayinhibit --quiet --toggle --pid-file $XDG_RUNTIME_DIR/wayinhibit.pid
+```
+
+Hyprland (`hyprland.conf` syntax):
+
+```
+bind = $mainMod, I, exec, wayinhibit --quiet --toggle --pid-file $XDG_RUNTIME_DIR/wayinhibit.pid
+```
+
+A systemd user service, started and stopped by hand with `systemctl --user start wayinhibit` (do not enable it, it would inhibit idle for the whole session):
+
+```ini
+[Unit]
+Description=Keep the screen awake
+
+[Service]
+ExecStart=/usr/bin/wayinhibit --quiet
+```
+
+The service needs `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` in its environment. Most compositors import them into the user manager; if yours does not, run `systemctl --user import-environment WAYLAND_DISPLAY` from its startup file.
+
+## Troubleshooting
+
+- **`failed to connect to the Wayland compositor`**: `WAYLAND_DISPLAY` or `XDG_RUNTIME_DIR` is missing, which is usual over SSH or in a service. Check `echo $WAYLAND_DISPLAY`.
+- **The screen still locks or dims**: read the table in the next section. On GNOME wayinhibit cannot work and prints a warning at startup. Elsewhere, check that your idle daemon honors inhibitors: one configured to ignore them locks the screen anyway.
+- **Started after the session was already idle**: the protocol does not wake an idle session, and an inhibitor created at that moment is not honored until the next idle period. Start wayinhibit before you step away.
+- **Lid close and manual suspend**: not covered, see the end of the next section.
+- **`PID file ... is already in use`**: another wayinhibit owns the file. Use `--toggle` to stop it, or another path.
 
 ## Compatibility
 
