@@ -27,9 +27,14 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Install sway
-        run: sudo apt-get install -y sway
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sway
 
       - name: Generate coverage (unit + Wayland integration tests)
+        env:
+          # The inhibition test must run here: a missing sway is a failure, not a skip.
+          WAYINHIBIT_REQUIRE_SWAY: "1"
         run: |
           source <(cargo llvm-cov show-env --export-prefix)
           cargo build --locked

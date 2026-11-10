@@ -162,10 +162,11 @@ fn tick(inhibitor: &mut Option<IdleInhibitor>) -> Result<(), String> {
         return Ok(());
     };
 
+    if let Some(notice) = inh.take_notice() {
+        warn(&notice);
+    }
     if let Err(err) = inh.tick() {
-        eprintln!(
-            "{BIN_NAME}: lost the Wayland connection ({err}); continuing without idle inhibition."
-        );
+        eprintln!("{BIN_NAME}: idle inhibition lost ({err}); continuing without it.");
         *inhibitor = None;
     }
     Ok(())

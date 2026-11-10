@@ -185,6 +185,18 @@ Requires a compositor that supports the `zwp_idle_inhibit_manager_v1` Wayland pr
 - **Cinnamon** (Muffin, Wayland session)
 - **COSMIC**, Mir, Louvre, phoc, Jay, Treeland
 
+Compositors disagree on which surface an idle inhibitor needs. Sway 1.11 and later and KDE Plasma 6 ignore an inhibitor on a surface that is not shown, while Hyprland, labwc, Wayfire and Cage still honor one on a bare surface. wayinhibit therefore asks for two inhibitions at the same time: one on a bare surface, and one on a transparent 1x1 pixel shown in the background layer with `wlr-layer-shell`. The second one is created about 300 ms after the pixel appears, because Hyprland judges an inhibitor once, when it is created.
+
+How well each compositor is covered:
+
+| Compositor | Evidence |
+|---|---|
+| Sway 1.12 | automated test, run in CI |
+| KDE Plasma (KWin 6.8) | automated test, run locally when `kwin_wayland` is installed |
+| Hyprland 0.57 | source reading, plus a manual check by the maintainer |
+| river, labwc, Wayfire, Cage, niri, COSMIC | source reading only, not tested |
+| GNOME (Mutter) | **not covered**: it only honors real windows and has no `wlr-layer-shell`; wayinhibit warns on startup |
+
 `wayinhibit` only inhibits the compositor's idle state (screen lock, screen off). It does not prevent `systemd-logind` from suspending the system on events it handles itself, such as closing a laptop lid.
 
 ## Development

@@ -187,6 +187,18 @@ The
 protocol is supported by most wlroots-based compositors (Sway, Hyprland,
 river, labwc) as well as GNOME and KDE on Wayland.
 .PP
+.B wayinhibit
+asks for two inhibitions at the same time, because compositors disagree on
+which surface one needs: one on a bare surface (honored by Hyprland, labwc,
+Wayfire and Cage), and one on a transparent 1x1 pixel shown in the background
+layer with
+.B wlr\-layer\-shell
+(honored by Sway 1.11 and later, KDE Plasma and river).
+GNOME only honors inhibitors on real windows and is not covered; a warning is
+printed on startup when
+.B wlr\-layer\-shell
+is missing.
+.PP
 The process ID is printed on startup (unless
 .B \-\-quiet
 is set) so that
