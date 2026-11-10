@@ -103,7 +103,11 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check compilation on MSRV
-        run: cargo check --locked
+        run: cargo check --locked --all-targets
+
+      - name: Run tests on MSRV
+        # The inhibition tests skip themselves here: no compositor is installed in this job.
+        run: cargo test --locked
 
   namcap:
     name: Validate PKGBUILD

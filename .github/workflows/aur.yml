@@ -31,28 +31,48 @@ jobs:
           mkdir -p ~/.ssh
           printf '%b\n' "$AUR_SSH_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n  StrictHostKeyChecking no\n' >> ~/.ssh/config
+          # The host key is pinned (its fingerprint, SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4,
+          # is the one published on the Arch wiki), so a man in the middle cannot receive the push.
+          printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > ~/.ssh/known_hosts
+          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n  StrictHostKeyChecking yes\n' >> ~/.ssh/config
 
       - name: Compute checksums
         id: sums
+        shell: bash
+        env:
+          # Passed as environment variables, never interpolated into the script: the tag is
+          # user input when the workflow is started by hand.
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+          EVENT: ${{ github.event_name }}
         run: |
-          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}"
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ]; then TAG="$DISPATCH_TAG"; else TAG="$RUN_TAG"; fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "error: '$TAG' is not a release tag like v1.2.3" >&2
+            exit 1
+          fi
           VERSION="${TAG#v}"
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
-          TARBALL_SHA=$(curl -fsSL \
-            "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$TAG.tar.gz" \
-            | sha256sum | cut -d' ' -f1)
+          # Downloads to a file first: hashing a pipe would give the checksum of an empty
+          # input when curl fails, and that checksum would end up in the package.
+          checksum() {
+            local file="$RUNNER_TEMP/asset"
+            rm -f "$file"
+            # set -e does not reach into a command substitution, so failures are explicit.
+            curl -fsSL --retry 3 --output "$file" "$1" || { echo "error: download failed: $1" >&2; exit 1; }
+            [ -s "$file" ] || { echo "error: empty download from $1" >&2; exit 1; }
+            sha256sum "$file" | cut -d' ' -f1
+          }
+
+          TARBALL_SHA=$(checksum "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$TAG.tar.gz")
           printf 'tarball_sha=%s\n' "$TARBALL_SHA" >> "$GITHUB_OUTPUT"
 
-          BINARY_SHA_X86_64=$(curl -fsSL \
-            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-x86_64" \
-            | sha256sum | cut -d' ' -f1)
+          BINARY_SHA_X86_64=$(checksum "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-x86_64")
           printf 'binary_sha_x86_64=%s\n' "$BINARY_SHA_X86_64" >> "$GITHUB_OUTPUT"
 
-          BINARY_SHA_AARCH64=$(curl -fsSL \
-            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-aarch64" \
-            | sha256sum | cut -d' ' -f1)
+          BINARY_SHA_AARCH64=$(checksum "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/wayinhibit-aarch64")
           printf 'binary_sha_aarch64=%s\n' "$BINARY_SHA_AARCH64" >> "$GITHUB_OUTPUT"
 
       - name: Update PKGBUILD and .SRCINFO
@@ -62,7 +82,9 @@ jobs:
           BINARY_SHA_X86_64: ${{ steps.sums.outputs.binary_sha_x86_64 }}
           BINARY_SHA_AARCH64: ${{ steps.sums.outputs.binary_sha_aarch64 }}
           REPO: ${{ github.repository }}
+        shell: bash
         run: |
+          set -euo pipefail
           python3 - << 'EOF'
           import os, re
 
@@ -72,25 +94,24 @@ jobs:
           binary_sha_aarch64 = os.environ['BINARY_SHA_AARCH64']
           repo = os.environ['REPO']
 
+          for name, value in [('tarball', tarball_sha), ('x86_64', binary_sha_x86_64), ('aarch64', binary_sha_aarch64)]:
+              if not re.fullmatch(r'[0-9a-f]{64}', value):
+                  raise SystemExit(f'error: the {name} checksum is not a sha256: {value!r}')
+
+          def substitute(pattern, replacement, text, flags=0):
+              # A pattern that matches nothing would leave an old checksum in place and ship it.
+              text, count = re.subn(pattern, replacement, text, flags=flags)
+              if count != 1:
+                  raise SystemExit(f'error: expected exactly one match for {pattern!r}, found {count}')
+              return text
+
           # Update PKGBUILD
           content = open('packaging/PKGBUILD').read()
-          content = re.sub(r'^pkgver=.*', f'pkgver={version}', content, flags=re.M)
-          content = re.sub(r'^pkgrel=.*', 'pkgrel=1', content, flags=re.M)
-          content = re.sub(
-              r"sha256sums=\(.*?\)",
-              f"sha256sums=(\n    '{tarball_sha}'\n)",
-              content, flags=re.DOTALL,
-          )
-          content = re.sub(
-              r"sha256sums_x86_64=\(.*?\)",
-              f"sha256sums_x86_64=(\n    '{binary_sha_x86_64}'\n)",
-              content, flags=re.DOTALL,
-          )
-          content = re.sub(
-              r"sha256sums_aarch64=\(.*?\)",
-              f"sha256sums_aarch64=(\n    '{binary_sha_aarch64}'\n)",
-              content, flags=re.DOTALL,
-          )
+          content = substitute(r'^pkgver=.*', f'pkgver={version}', content, re.M)
+          content = substitute(r'^pkgrel=.*', 'pkgrel=1', content, re.M)
+          content = substitute(r"sha256sums=\(.*?\)", f"sha256sums=(\n    '{tarball_sha}'\n)", content, re.DOTALL)
+          content = substitute(r"sha256sums_x86_64=\(.*?\)", f"sha256sums_x86_64=(\n    '{binary_sha_x86_64}'\n)", content, re.DOTALL)
+          content = substitute(r"sha256sums_aarch64=\(.*?\)", f"sha256sums_aarch64=(\n    '{binary_sha_aarch64}'\n)", content, re.DOTALL)
           open('packaging/PKGBUILD', 'w').write(content)
 
           # Generate .SRCINFO
