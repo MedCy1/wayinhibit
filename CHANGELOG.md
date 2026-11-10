@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.2.1] - 2026-11-10
+
+### Bug Fixes
+
+- Don't refuse to run when the pid file is in use or cannot be locked
 ## [1.2.0] - 2026-11-10
 
 ### Bug Fixes
