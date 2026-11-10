@@ -14,7 +14,7 @@ if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
 fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-    printf 'error: working tree is not clean — commit or stash your changes first\n' >&2
+    printf 'error: working tree is not clean, commit or stash your changes first\n' >&2
     exit 1
 fi
 

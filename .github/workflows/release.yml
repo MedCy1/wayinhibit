@@ -42,7 +42,7 @@ jobs:
           retention-days: 1
 
   smoke-test-x86_64:
-    name: Smoke test — Arch Linux (x86_64)
+    name: Smoke test (Arch Linux, x86_64)
     needs: build
     runs-on: ubuntu-latest
     container: archlinux:base
@@ -66,7 +66,7 @@ jobs:
         run: ./wayinhibit --help
 
   smoke-test-aarch64:
-    name: Smoke test — ARM64 (aarch64)
+    name: Smoke test (ARM64, aarch64)
     needs: build
     runs-on: ubuntu-24.04-arm
 
