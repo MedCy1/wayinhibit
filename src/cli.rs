@@ -48,27 +48,28 @@ pub enum ParseOutcome {
 }
 
 pub fn parse_duration(s: &str) -> Result<Duration, String> {
-    if let Some(h) = s.strip_suffix('h') {
-        let hours: u64 = h
-            .parse()
-            .map_err(|_| format!("invalid duration '{s}': expected e.g. 30s, 5m, 2h"))?;
-        return Ok(Duration::from_secs(hours * 3600));
-    }
-    if let Some(m) = s.strip_suffix('m') {
-        let minutes: u64 = m
-            .parse()
-            .map_err(|_| format!("invalid duration '{s}': expected e.g. 30s, 5m, 2h"))?;
-        return Ok(Duration::from_secs(minutes * 60));
-    }
-    if let Some(s_) = s.strip_suffix('s') {
-        let secs: u64 = s_
-            .parse()
-            .map_err(|_| format!("invalid duration '{s}': expected e.g. 30s, 5m, 2h"))?;
-        return Ok(Duration::from_secs(secs));
-    }
-    Err(format!(
-        "invalid duration '{s}': expected a value with a unit suffix, e.g. 30s, 5m, 2h"
-    ))
+    let invalid = || format!("invalid duration '{s}': expected e.g. 30s, 5m, 2h");
+    let too_large = || format!("invalid duration '{s}': too large");
+
+    let (digits, unit_secs) = if let Some(h) = s.strip_suffix('h') {
+        (h, 3600)
+    } else if let Some(m) = s.strip_suffix('m') {
+        (m, 60)
+    } else if let Some(secs) = s.strip_suffix('s') {
+        (secs, 1)
+    } else {
+        return Err(format!(
+            "invalid duration '{s}': expected a value with a unit suffix, e.g. 30s, 5m, 2h"
+        ));
+    };
+
+    let count: u64 = digits.parse().map_err(|_| invalid())?;
+    let duration = Duration::from_secs(count.checked_mul(unit_secs).ok_or_else(too_large)?);
+    // The deadline is "now + duration": refuse values the clock cannot represent.
+    std::time::Instant::now()
+        .checked_add(duration)
+        .ok_or_else(too_large)?;
+    Ok(duration)
 }
 
 /// Extracts the value out of an inline `--flag=value` argument, rejecting an empty value.
@@ -424,6 +425,29 @@ mod tests {
         assert!(parse_duration("abc").is_err());
         assert!(parse_duration("5").is_err());
         assert!(parse_duration("").is_err());
+    }
+
+    #[test]
+    fn rejects_durations_that_overflow_instead_of_panicking() {
+        for input in [
+            "99999999999999999h",
+            "307445734561825861m",   // u64::MAX / 60 + 1
+            "18446744073709551615s", // fits in a Duration, not in a clock deadline
+            "18446744073709551616s", // does not even fit in u64
+        ] {
+            let err = parse_duration(input).unwrap_err();
+            assert!(
+                err.contains("too large") || err.contains("invalid"),
+                "{input}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_the_largest_units_that_still_fit() {
+        assert_eq!(parse_duration("24h").unwrap(), Duration::from_secs(86_400));
+        assert_eq!(parse_duration("0s").unwrap(), Duration::ZERO);
+        assert!(parse_duration("876000h").is_ok()); // about a century
     }
 
     #[test]

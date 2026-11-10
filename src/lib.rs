@@ -72,7 +72,10 @@ fn run(config: Config) -> Result<ExitCode, String> {
         Some(IdleInhibitor::connect(Duration::from_millis(250))?)
     };
 
-    let deadline = config.timeout.map(|d| Instant::now() + d);
+    let deadline = config
+        .timeout
+        .map(|d| Instant::now().checked_add(d).ok_or("timeout is too large"))
+        .transpose()?;
 
     if let Some(ref cmd) = config.on_inhibit {
         run_hook(cmd);
