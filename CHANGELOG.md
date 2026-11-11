@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.3.1] - 2026-11-11
+
+### Bug Fixes
+
+- Update rustix to 1.1.6 (RUSTSEC-2026-0486)
 ## [1.3.0] - 2026-11-11
 
 ### Bug Fixes
