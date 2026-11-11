@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.3.2] - 2026-11-11
+
+### Bug Fixes
+
+- Don't refuse to run when the compositor declines the displayed surface
+- Show the inhibitor surface in the top layer so niri and COSMIC honor it
+
+### Documentation
+
+- Say which compositors are tested and how
 ## [1.3.1] - 2026-11-11
 
 ### Bug Fixes
