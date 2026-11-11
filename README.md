@@ -233,8 +233,11 @@ How well each compositor is covered:
 |---|---|
 | Sway 1.12 | automated test, run in CI |
 | KDE Plasma (KWin 6.8) | automated test, run locally when `kwin_wayland` is installed |
-| Hyprland 0.57 | source reading, plus a manual check by the maintainer |
-| river, labwc, Wayfire, Cage, niri, COSMIC | source reading only, not tested |
+| labwc 0.20, Wayfire 0.11 | automated test, run locally; the bare surface is enough there |
+| Cage 0.3 | automated test, run locally; no `wlr-layer-shell`, so wayinhibit warns and relies on the bare surface |
+| Hyprland 0.57 | manual check by the maintainer (bare surface alone, displayed surface alone, and both) |
+| river 0.5 | it has no window manager of its own and closes the displayed surface until one runs: wayinhibit warns and carries on, but a bare surface does not inhibit there. Not tested with a window manager |
+| niri, COSMIC | source reading only, not tested |
 | GNOME (Mutter) | **not covered**: it only honors real windows and has no `wlr-layer-shell`; wayinhibit warns on startup |
 
 `wayinhibit` only inhibits the compositor's idle state (screen lock, screen off). It does not prevent `systemd-logind` from suspending the system on events it handles itself, such as closing a laptop lid.
