@@ -7,7 +7,11 @@
 //!
 //! * Sway needs `sway` on the PATH. Without it the test is skipped, unless
 //!   WAYINHIBIT_REQUIRE_SWAY is set (as in CI), in which case a missing Sway is a failure.
-//! * KDE needs `kwin_wayland` and `dbus-run-session`; WAYINHIBIT_REQUIRE_KWIN works the same way.
+//! * KDE needs `kwin_wayland` and `dbus-run-session`; the others (labwc, cage, wayfire) are
+//!   plain programs. Each has its own WAYINHIBIT_REQUIRE_<NAME> variable.
+//! * river 0.3 (`river-classic`) is tested here. river 0.4 and later needs a separate window
+//!   manager and refuses layer surfaces without one, so it cannot be used for this test; it has
+//!   its own test in behavior.rs.
 
 mod common;
 
@@ -90,4 +94,24 @@ fn sway_stays_awake_exactly_while_wayinhibit_runs() {
 #[test]
 fn kwin_stays_awake_exactly_while_wayinhibit_runs() {
     the_compositor_stays_awake_exactly_while_wayinhibit_runs(Kind::Kwin);
+}
+
+#[test]
+fn labwc_stays_awake_exactly_while_wayinhibit_runs() {
+    the_compositor_stays_awake_exactly_while_wayinhibit_runs(Kind::Labwc);
+}
+
+#[test]
+fn cage_stays_awake_exactly_while_wayinhibit_runs() {
+    the_compositor_stays_awake_exactly_while_wayinhibit_runs(Kind::Cage);
+}
+
+#[test]
+fn wayfire_stays_awake_exactly_while_wayinhibit_runs() {
+    the_compositor_stays_awake_exactly_while_wayinhibit_runs(Kind::Wayfire);
+}
+
+#[test]
+fn river_classic_stays_awake_exactly_while_wayinhibit_runs() {
+    the_compositor_stays_awake_exactly_while_wayinhibit_runs(Kind::River);
 }

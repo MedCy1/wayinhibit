@@ -146,25 +146,33 @@ impl IdleInhibitor {
         // and shm there is nothing better to do.
         let shell = globals.bind::<ZwlrLayerShellV1, _, _>(&qh, 1..=1, ());
         let shm = globals.bind::<WlShm, _, _>(&qh, 1..=1, ());
-        let notice = inhibition_warning(shell.is_ok(), shm.is_ok());
+        let mut notice = inhibition_warning(shell.is_ok(), shm.is_ok());
         let layer = match (shell, shm) {
             (Ok(shell), Ok(shm)) => {
                 let surface = compositor.create_surface(&qh, ());
-                let mapped = map_surface(
+                match map_surface(
                     &compositor,
                     &shell,
                     &shm,
                     &surface,
                     &mut event_queue,
                     &mut app,
-                )
-                .map_err(|err| format!("failed to show the inhibitor surface: {err}"))?;
-                Some(LayerInhibitor {
-                    surface,
-                    mapped,
-                    inhibitor: None,
-                    settle_until: Instant::now() + LAYER_SETTLE,
-                })
+                )? {
+                    Mapping::Shown(mapped) => Some(LayerInhibitor {
+                        surface,
+                        mapped,
+                        inhibitor: None,
+                        settle_until: Instant::now() + LAYER_SETTLE,
+                    }),
+                    // The compositor says no (river without a window manager, no output...).
+                    // That is not a reason to refuse to work: the bare inhibitor is still there
+                    // and the command still has to run.
+                    Mapping::Declined(reason) => {
+                        surface.destroy();
+                        notice = Some(declined_warning(&reason));
+                        None
+                    }
+                }
             }
             _ => None,
         };
@@ -308,9 +316,24 @@ fn inhibition_warning(has_layer_shell: bool, has_shm: bool) -> Option<String> {
         "wlr-layer-shell"
     };
     Some(format!(
-        "this compositor does not offer {missing}, so wayinhibit can only use a surface without \
-         a role; compositors such as GNOME ignore it and the session may still go idle"
+        "this compositor does not offer {missing}, so wayinhibit relies on a surface without a \
+         role, which some compositors (GNOME, for instance) do not honor"
     ))
+}
+
+/// Same, for a compositor that offers layer-shell but did not accept our surface.
+fn declined_warning(reason: &str) -> String {
+    format!(
+        "the compositor did not accept wayinhibit's inhibitor surface ({reason}), so it relies \
+         on a surface without a role, which several compositors do not honor"
+    )
+}
+
+/// How showing the layer surface ended. A connection failure is an `Err` of its own: only the
+/// compositor declining is something to carry on from.
+enum Mapping {
+    Shown(MappedSurface),
+    Declined(String),
 }
 
 /// Gives `surface` the layer-shell role, waits for the compositor to configure it, then
@@ -322,7 +345,7 @@ fn map_surface(
     surface: &WlSurface,
     queue: &mut EventQueue<App>,
     app: &mut App,
-) -> Result<MappedSurface, String> {
+) -> Result<Mapping, String> {
     let qh = queue.handle();
 
     let layer_surface = shell.get_layer_surface(
@@ -353,11 +376,17 @@ fn map_surface(
             .roundtrip(app)
             .map_err(|err| format!("Wayland round trip failed: {err}"))?;
     }
-    if app.closed {
-        return Err("the compositor refused the surface".to_owned());
-    }
-    if !app.configured {
-        return Err("the compositor never configured the surface".to_owned());
+    if app.closed || !app.configured {
+        return Ok(decline(
+            layer_surface,
+            None,
+            app,
+            if app.closed {
+                "it closed the surface"
+            } else {
+                "it never configured the surface"
+            },
+        ));
     }
 
     let buffer = transparent_pixel(shm, &qh)?;
@@ -367,13 +396,34 @@ fn map_surface(
         .roundtrip(app)
         .map_err(|err| format!("Wayland round trip failed: {err}"))?;
     if app.closed {
-        return Err("the compositor closed the surface".to_owned());
+        return Ok(decline(
+            layer_surface,
+            Some(buffer),
+            app,
+            "it closed the surface",
+        ));
     }
 
-    Ok(MappedSurface {
+    Ok(Mapping::Shown(MappedSurface {
         layer_surface,
         buffer,
-    })
+    }))
+}
+
+/// Gives up on the layer surface and forgets that the compositor closed it, so that the
+/// closing is not reported a second time as if it had happened while running.
+fn decline(
+    layer_surface: ZwlrLayerSurfaceV1,
+    buffer: Option<WlBuffer>,
+    app: &mut App,
+    reason: &str,
+) -> Mapping {
+    layer_surface.destroy();
+    if let Some(buffer) = buffer {
+        buffer.destroy();
+    }
+    app.closed = false;
+    Mapping::Declined(reason.to_owned())
 }
 
 /// A 1x1 fully transparent ARGB pixel. A new memory file is zero-filled, which in this
@@ -392,7 +442,7 @@ fn transparent_pixel(shm: &WlShm, qh: &QueueHandle<App>) -> Result<WlBuffer, Str
 
 #[cfg(test)]
 mod tests {
-    use super::inhibition_warning;
+    use super::{declined_warning, inhibition_warning};
 
     #[test]
     fn no_warning_when_both_globals_exist() {
@@ -407,5 +457,13 @@ mod tests {
         let no_shm = inhibition_warning(true, false).unwrap();
         assert!(no_shm.contains("wl_shm"), "{no_shm}");
         assert!(inhibition_warning(false, false).is_some());
+    }
+
+    #[test]
+    fn a_declined_surface_is_explained_and_not_fatal_wording() {
+        let warning = declined_warning("it closed the surface");
+        assert!(warning.contains("it closed the surface"), "{warning}");
+        assert!(warning.contains("without a role"), "{warning}");
+        assert!(!warning.contains("failed"), "{warning}");
     }
 }

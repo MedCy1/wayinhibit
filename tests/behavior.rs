@@ -359,17 +359,21 @@ fn the_release_hook_is_not_cut_short_by_the_stop_that_caused_it_but_by_a_second_
 
 // --- the compositor going away ----------------------------------------------------------
 
-fn sway() -> Option<Compositor> {
-    let kind = Kind::Sway;
+fn start(kind: Kind) -> Option<Compositor> {
     if !kind.available() {
         assert!(
             std::env::var_os(kind.required_variable()).is_none(),
-            "sway is required here but was not found"
+            "{} is required here but was not found",
+            kind.name()
         );
-        eprintln!("skipped: sway not found");
+        eprintln!("skipped: {} not found", kind.name());
         return None;
     }
     Some(Compositor::start(kind))
+}
+
+fn sway() -> Option<Compositor> {
+    start(Kind::Sway)
 }
 
 #[test]
@@ -413,5 +417,31 @@ fn command_mode_keeps_the_command_and_its_status_when_the_compositor_goes_away()
     let mut stderr = String::new();
     std::io::Read::read_to_string(instance.0.stderr.as_mut().unwrap(), &mut stderr).unwrap();
     assert!(stderr.contains("keeps running without it"), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
+
+/// river 0.4 and later has no window manager of its own and closes layer surfaces until one is
+/// running (this test only runs where that river is installed),
+/// so the displayed surface is refused. The command must run all the same.
+#[test]
+fn a_compositor_that_refuses_the_displayed_surface_does_not_stop_the_command() {
+    let Some(compositor) = start(Kind::RiverModular) else {
+        return;
+    };
+    let mut command = Command::new(bin());
+    command
+        .args(["--", "sh", "-c", "exit 7"])
+        .env("XDG_RUNTIME_DIR", compositor.runtime_dir())
+        .env("WAYLAND_DISPLAY", compositor.display())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    let output = command.output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(7),
+        "the command must have run: {stderr}"
+    );
     assert!(!stderr.contains("panicked"), "{stderr}");
 }

@@ -36,6 +36,29 @@ pub const SETTLE: Duration = Duration::from_millis(1200);
 pub enum Kind {
     Sway,
     Kwin,
+    Labwc,
+    Cage,
+    Wayfire,
+    /// river 0.3 and earlier: a window manager and a compositor in one program.
+    River,
+    /// river 0.4 and later: the window manager is a separate program. Without one it closes
+    /// every layer surface.
+    RiverModular,
+}
+
+/// The minor version of the installed `river` (0.3.17 gives 3), if there is one.
+fn river_minor_version() -> Option<u32> {
+    let output = Command::new("river").arg("-version").output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let version = text
+        .split_whitespace()
+        .find(|word| word.starts_with("0."))?;
+    version.split('.').nth(1)?.parse().ok()
+}
+
+fn on_path(program: &str) -> bool {
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
 }
 
 impl Kind {
@@ -43,25 +66,25 @@ impl Kind {
         match self {
             Kind::Sway => "sway",
             Kind::Kwin => "kwin",
+            Kind::Labwc => "labwc",
+            Kind::Cage => "cage",
+            Kind::Wayfire => "wayfire",
+            Kind::River => "river",
+            Kind::RiverModular => "river-modular",
         }
     }
 
-    pub fn required_variable(self) -> &'static str {
-        match self {
-            Kind::Sway => "WAYINHIBIT_REQUIRE_SWAY",
-            Kind::Kwin => "WAYINHIBIT_REQUIRE_KWIN",
-        }
+    /// Setting this variable turns "not installed" from a skip into a failure (as in CI).
+    pub fn required_variable(self) -> String {
+        format!("WAYINHIBIT_REQUIRE_{}", self.name().to_uppercase())
     }
 
     pub fn available(self) -> bool {
-        let on_path = |program: &str| {
-            std::env::var_os("PATH").is_some_and(|paths| {
-                std::env::split_paths(&paths).any(|dir| dir.join(program).is_file())
-            })
-        };
         match self {
-            Kind::Sway => on_path("sway"),
             Kind::Kwin => on_path("kwin_wayland") && on_path("dbus-run-session"),
+            Kind::River => on_path("river") && river_minor_version().is_some_and(|m| m < 4),
+            Kind::RiverModular => on_path("river") && river_minor_version().is_some_and(|m| m >= 4),
+            other => on_path(other.name()),
         }
     }
 }
@@ -102,6 +125,34 @@ impl Compositor {
                 ]);
                 command
             }
+            Kind::Labwc => {
+                // An empty configuration directory: no autostart, no panel.
+                let config = runtime_dir.join("labwc-config");
+                std::fs::create_dir_all(&config).unwrap();
+                let mut command = Command::new("labwc");
+                command.arg("-C").arg(config);
+                command
+            }
+            Kind::Cage => {
+                // Cage shows one program full screen and quits with it.
+                let mut command = Command::new("cage");
+                command.args(["--", "sleep", "300"]);
+                command
+            }
+            Kind::Wayfire => {
+                let config = runtime_dir.join("wayfire.ini");
+                std::fs::write(&config, "[core]\nplugins = \n").unwrap();
+                let mut command = Command::new("wayfire");
+                command.arg("-c").arg(config);
+                command
+            }
+            Kind::River => {
+                // `-c true`: the init program, so that no user configuration is read.
+                let mut command = Command::new("river");
+                command.args(["-c", "true"]);
+                command
+            }
+            Kind::RiverModular => Command::new("river"),
         };
         let child = command
             .env("XDG_RUNTIME_DIR", &runtime_dir)
