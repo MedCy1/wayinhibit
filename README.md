@@ -225,7 +225,7 @@ Requires a compositor that supports the `zwp_idle_inhibit_manager_v1` Wayland pr
 - **Cinnamon** (Muffin, Wayland session)
 - **COSMIC**, Mir, Louvre, phoc, Jay, Treeland
 
-Compositors disagree on which surface an idle inhibitor needs. Sway 1.11 and later and KDE Plasma 6 ignore an inhibitor on a surface that is not shown, while Hyprland, labwc, Wayfire and Cage still honor one on a bare surface. wayinhibit therefore asks for two inhibitions at the same time: one on a bare surface, and one on a transparent 1x1 pixel shown in the background layer with `wlr-layer-shell`. The second one is created about 300 ms after the pixel appears, because Hyprland judges an inhibitor once, when it is created.
+Compositors disagree on which surface an idle inhibitor needs. Sway 1.11 and later and KDE Plasma 6 ignore an inhibitor on a surface that is not shown, while Hyprland, labwc, Wayfire and Cage still honor one on a bare surface. wayinhibit therefore asks for two inhibitions at the same time: one on a bare surface, and one on a transparent 1x1 pixel shown in the top layer with `wlr-layer-shell`. The second one is created about 300 ms after the pixel appears, because Hyprland judges an inhibitor once, when it is created.
 
 How well each compositor is covered:
 
@@ -236,8 +236,10 @@ How well each compositor is covered:
 | labwc 0.20, Wayfire 0.11 | automated test, run locally; the bare surface is enough there |
 | Cage 0.3 | automated test, run locally; no `wlr-layer-shell`, so wayinhibit warns and relies on the bare surface |
 | Hyprland 0.57 | manual check by the maintainer (bare surface alone, displayed surface alone, and both) |
+| river 0.3 (`river-classic`) | automated test, run locally; only the displayed surface is honored there |
 | river 0.5 | it has no window manager of its own and closes the displayed surface until one runs: wayinhibit warns and carries on, but a bare surface does not inhibit there. Not tested with a window manager |
-| niri, COSMIC | source reading only, not tested |
+| niri 26.04 | measured by hand, nested in a headless Sway: only the displayed surface is honored, also while a window covers the whole output |
+| COSMIC 1.11 | measured by hand, nested in a headless Sway (its rendering reported errors there): only the displayed surface is honored |
 | GNOME (Mutter) | **not covered**: it only honors real windows and has no `wlr-layer-shell`; wayinhibit warns on startup |
 
 `wayinhibit` only inhibits the compositor's idle state (screen lock, screen off). It does not prevent `systemd-logind` from suspending the system on events it handles itself, such as closing a laptop lid.

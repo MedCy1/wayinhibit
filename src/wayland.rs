@@ -100,7 +100,7 @@ pub struct IdleInhibitor {
     /// still honor an inhibitor on it, and it needs no timing care. Others ignore it.
     bare: WlSurface,
     bare_inhibitor: ZwpIdleInhibitorV1,
-    /// A transparent surface really shown in the background layer, which compositors that
+    /// A transparent surface really shown in the top layer, which compositors that
     /// ignore the bare one (Sway 1.11+, river, KWin, niri) do honor. `None` without
     /// wlr-layer-shell (GNOME).
     layer: Option<LayerInhibitor>,
@@ -142,7 +142,7 @@ impl IdleInhibitor {
         let bare = compositor.create_surface(&qh, ());
         let bare_inhibitor = inhibitor_manager.create_inhibitor(&bare, &qh, ());
 
-        // A transparent 1x1 pixel really shown in the background layer. Without layer-shell
+        // A transparent 1x1 pixel really shown in the top layer. Without layer-shell
         // and shm there is nothing better to do.
         let shell = globals.bind::<ZwlrLayerShellV1, _, _>(&qh, 1..=1, ());
         let shm = globals.bind::<WlShm, _, _>(&qh, 1..=1, ());
@@ -351,7 +351,7 @@ fn map_surface(
     let layer_surface = shell.get_layer_surface(
         surface,
         None, // let the compositor pick the output
-        Layer::Background,
+        Layer::Top,
         "wayinhibit".to_owned(),
         &qh,
         (),
