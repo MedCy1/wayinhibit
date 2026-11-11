@@ -1,6 +1,21 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.3.0] - 2026-11-11
+
+### Bug Fixes
+
+- Inhibit with a bare and a displayed surface so Sway 1.11+ and KWin honor it
+- Terminal, hooks, signals and output no longer misbehave around a wrapped command
+
+### CI & Automation
+
+- Stop a bad release or a broken AUR package from being published
+
+### Documentation
+
+- Rewrite README usage, exit status and Waybar sections
+- Make the README, man page, --help and completions agree
 ## [1.2.1] - 2026-11-10
 
 ### Bug Fixes
